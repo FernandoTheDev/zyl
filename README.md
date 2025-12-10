@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="./vscode/imagens/dark.png" width="200" alt="logo"/>
-</p>
+<img src="./vscode/imagens/dark.png" width="200" alt="logo"/>
 
 # The ZYL Programming Language
 

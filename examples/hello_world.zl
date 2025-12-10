@@ -1,0 +1,31 @@
+int printf (string msg, ...);
+void free (void* ptr);
+void* malloc(int size);
+int scanf(string format, ...);
+
+int main() {
+    string* name = (string*) malloc(100);
+    int* age = (int*) malloc(sizeof int);
+    
+    if name == null {
+        printf("error allocating memory for name")
+        return 0
+    }
+    
+    if age == null {
+        printf("error allocating memory for age")
+        free(name)
+        return 0
+    }
+    
+    printf("Name: ")
+    scanf("%s", name);
+
+    *age = 17;
+    printf("Hello %s, are you %d years old!\n", name, *age)
+    
+    free(name)
+    free(age)
+
+    return 0
+}

@@ -1,0 +1,9 @@
+int sum(int x, int y) { return x + y }
+
+type fn = (int, int): int
+
+int main() {
+    fn teste = sum
+    int x = teste(1, 2)
+    return 0
+}

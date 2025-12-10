@@ -1,0 +1,132 @@
+int printf(string msg, ...);
+
+int main() {
+    // Test 1: while com break
+    printf("=== Test 1: while com break ===\n")
+    int i = 0
+    while true {
+        if i == 5
+            break
+        printf("%d ", i)
+        i++
+    }
+    printf("\n")
+
+    // Test 2: while com continue
+    printf("=== Test 2: while com continue (skip odds) ===\n")
+    i = 0
+    while i < 10 {
+        i++
+        if i % 2 == 1
+            continue
+        printf("%d ", i)
+    }
+    printf("\n")
+
+    // Test 3: for loop básico
+    printf("=== Test 3: for loop básico ===\n")
+    for int j = 0; j < 5; j++ {
+        printf("%d ", j)
+    }
+    printf("\n")
+
+    // Test 4: for com break
+    printf("=== Test 4: for com break ===\n")
+    for int k = 0; k < 10; k++ {
+        if k == 7
+            break
+        printf("%d ", k)
+    }
+    printf("\n")
+
+    // Test 5: for com continue
+    printf("=== Test 5: for com continue (skip evens) ===\n")
+    for int m = 0; m < 10; m++ {
+        if m % 2 == 0
+            continue
+        printf("%d ", m)
+    }
+    printf("\n")
+
+    // Test 6: nested loops
+    printf("=== Test 6: nested loops ===\n")
+    for int x = 1; x <= 3; x++ {
+        for int y = 1; y <= 3; y++ {
+            printf("%d*%d=%d ", x, y, x * y)
+        }
+        printf("\n")
+    }
+
+    // Test 7: while decrescente com módulo
+    printf("=== Test 7: while decrescente (pares) ===\n")
+    int n = 10
+    while n > 0 {
+        if n % 2 == 0
+            printf("%d ", n)
+        n--
+    }
+    printf("\n")
+
+    // Test 8: for com step de 2
+    printf("=== Test 8: for com step de 2 ===\n")
+    for int p = 0; p < 10; p = p + 2 {
+        printf("%d ", p)
+    }
+    printf("\n")
+
+    // Test 9: loop infinito com múltiplas condições
+    printf("=== Test 9: loop com múltiplas breaks ===\n")
+    int count = 0
+    while true {
+        if count == 3 {
+            printf("break at 3\n")
+            break
+        }
+        if count == 10 {
+            printf("break at 10\n")
+            break
+        }
+        printf("%d ", count)
+        count++
+    }
+    printf("\n")
+
+    // Test 10: nested while com break no inner
+    printf("=== Test 10: nested while com break ===\n")
+    int outer = 0
+    while outer < 3 {
+        int inner = 0
+        while true {
+            if inner == 2
+                break
+            printf("(%d,%d) ", outer, inner)
+            inner++
+        }
+        printf("\n")
+        outer++
+    }
+
+    // Test 11: for com decremento
+    printf("=== Test 11: for decrescente ===\n")
+    for int d = 5; d >= 0; d-- {
+        printf("%d ", d)
+    }
+    printf("\n")
+
+    // Test 12: while com operações complexas
+    printf("=== Test 12: fibonacci (primeiros 10) ===\n")
+    int a = 0
+    int b = 1
+    int fib_count = 0
+    while fib_count < 10 {
+        printf("%d ", a)
+        int temp = a + b
+        a = b
+        b = temp
+        fib_count++
+    }
+    printf("\n")
+
+    printf("=== All tests completed! ===\n")
+    return 0
+}

@@ -1,0 +1,18 @@
+int printf(string msg, ...);
+
+int main() {
+    printf("=== Array Literal Test ===\n")
+
+    int[3] fib = [1, 1, 2]
+    printf("Fib: %d, %d, %d\n", fib[0], fib[1], fib[2])
+
+    int[2][2] matrix = [
+        [10, 20],
+        [30, 40]
+    ]
+    
+    printf("%d (Expected 200)\n", matrix[0][1] * matrix[0][0])
+    printf("%d (Expected 1200)\n", matrix[1][0] * matrix[1][1])
+    
+    return 0
+}

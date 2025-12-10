@@ -1,0 +1,14 @@
+import std.libc.io : { printf }
+import std.libc.pthread
+
+void* thread_test(void* arg) {
+    printf("Thread running\n");
+    return null
+}
+
+int main() {
+    pthread_t tid;
+    pthread_create(&tid, null, thread_test, null);
+    pthread_join(tid, null);
+    return 0;
+}

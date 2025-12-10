@@ -1,0 +1,5 @@
+int time(void* timer);
+string ctime(int* timer);
+void* localtime(int* timer);
+int clock();
+int usleep(int usec);

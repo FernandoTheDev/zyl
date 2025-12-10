@@ -1,0 +1,50 @@
+void "llvm.va_start"(void* list);
+void "llvm.va_end"(void* list);
+
+struct VaList {
+    int gp_offset;
+    int fp_offset;
+    void* overflow_arg_area;
+    void* reg_save_area;
+}
+
+// ABI x86-64:
+// 6 registradores inteiros (RDI, RSI, RDX, RCX, R8, R9)
+// Cada um tem 8 bytes. Total = 48 bytes.
+// Se gp_offset < 48, o argumento está na área de salvamento de registradores.
+// Senão, está no overflow (stack).
+
+int va_arg_int(VaList* list) {
+    int result;
+    int* ptr;
+
+    if (list.gp_offset < 48) {
+        // --- CASO 1: Ler do Registrador ---
+        
+        // 1. Calcula o endereço: reg_save_area + gp_offset
+        // Precisamos de cast para char* para somar bytes
+        char* addr = (char*) list.reg_save_area;
+        addr = addr + list.gp_offset;
+        
+        // 2. Lê o valor
+        ptr = (int*) addr;
+        result = *ptr;
+        
+        // 3. Avança o offset (sempre 8 bytes em 64-bit, mesmo para int32)
+        list.gp_offset = list.gp_offset + 8;
+    } 
+    else {
+        // --- CASO 2: Ler da Stack (Overflow) ---
+        
+        // 1. O argumento está onde overflow_arg_area aponta
+        ptr = (int*) list.overflow_arg_area;
+        result = *ptr;
+        
+        // 2. Avança o ponteiro da stack (8 bytes)
+        char* next_addr = (char*) list.overflow_arg_area;
+        next_addr = next_addr + 8;
+        list.overflow_arg_area = (void*) next_addr;
+    }
+
+    return result;
+}

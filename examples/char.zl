@@ -1,0 +1,36 @@
+int printf  (string msg, ...);
+
+long strlen(string str) {
+    for long i = 0L ; str[i] != '\0' ; i++ {}
+    return i
+}
+
+int strcmp(string a, string b) {
+    for long i = 0L ;; i++ {
+        int ca = a[i]
+        int cb = b[i]
+
+        if ca != cb
+            return (int)(ca - cb)
+
+        if ca == '\0'
+            return 0
+    }
+    return 0
+}
+
+
+int main() {
+    string name = "Fernando"
+    char ch = name[0]
+    printf("%c\n", ch)
+
+    printf("strlen: %lld\n", strlen(name))
+
+    if strcmp(name, "Fernando") == 0
+        printf("equals.\n")
+    else
+        printf("not equals.\n")
+    
+    return 0
+}

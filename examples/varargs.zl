@@ -1,0 +1,25 @@
+import std.libc.io : { printf }
+import std.varargs
+
+int sum(...) {
+    // int _vacount -> automatically generated
+    VaList list;
+    "llvm.va_start"((void*) &list)
+    
+    int total = 0
+    
+    for int i = 0; i < _vacount; i++ {
+        int val = va_arg_int(&list)
+        total = total + val
+    }
+
+    "llvm.va_end"((void*) &list)
+    return total
+}
+
+int main() {
+    int n = sum(10, 20, 30, 40, 69)
+    int (...) a = &sum
+    printf("%d\n", n)
+    return 0
+}

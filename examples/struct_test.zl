@@ -1,0 +1,142 @@
+int printf(string msg, ...);
+void free(void* ptr);
+void* malloc(int size);
+
+struct Person {
+    string name;
+    int age;
+    Person* friend = null
+}
+
+int main() {
+    printf("=== Test: Dynamic Struct Arrays ===\n\n")
+    
+    // Test 1: Alocar array de 3 pessoas
+    printf("--- Test 1: Allocating array of 3 persons ---\n")
+    int SIZE_P = sizeof Person
+    Person* people = (Person*) malloc(SIZE_P * 3)
+    if people == null {
+        printf("Error: malloc failed\n")
+        return 1
+    }
+    
+    // Test 2: Inicializar cada elemento
+    printf("--- Test 2: Initializing elements ---\n")
+    people[0] = Person{"Alice", 25, null}
+    people[1] = Person{"Bob", 30, null}
+    people[2] = Person{"Charlie", 22, null}
+    
+    // Test 3: Ler e imprimir
+    printf("--- Test 3: Reading array ---\n")
+    for int i = 0; i < 3; i++ {
+        printf("%d: %s, age %d\n", i, people[i].name, people[i].age)
+    }
+    printf("\n")
+    
+    // Test 4: Modificar elementos
+    printf("--- Test 4: Modifying elements ---\n")
+    people[1].age = 31
+    people[2].name = "Chuck"
+    printf("Modified Bob's age: %d\n", people[1].age)
+    printf("Modified Charlie's name: %s\n\n", people[2].name)
+    
+    // Test 5: Criar links entre pessoas usando indexação
+    printf("--- Test 5: Creating friend links (via indexing) ---\n")
+    Person alice = people[0]
+    Person bob = people[1]
+    Person charlie = people[2]
+    
+    alice.friend = &bob
+    bob.friend = &charlie
+    charlie.friend = &alice  // Circular!
+    
+    printf("Alice's friend: %s\n", alice.friend.name)
+    printf("Bob's friend: %s\n", bob.friend.name)
+    printf("Charlie's friend: %s\n", charlie.friend.name)
+    printf("\n")
+    
+    // Test 6: Navegar pela cadeia de amigos
+    printf("--- Test 6: Friend chain ---\n")
+    Person* current = &alice
+    printf("%s -> ", current.name)
+    current = current.friend
+    printf("%s -> ", current.name)
+    current = current.friend
+    printf("%s -> ", current.name)
+    current = current.friend
+    printf("%s -> ", current.name)
+    printf("...\n\n")
+    
+    // Test 7: Alocar pessoas individuais
+    printf("--- Test 7: Individual allocations ---\n")
+    Person* p1 = (Person*) malloc(SIZE_P)
+    Person* p2 = (Person*) malloc(SIZE_P)
+    
+    if p1 == null || p2 == null {
+        printf("Error: malloc failed\n")
+        free(people)
+        if p1 != null { free(p1); }
+        if p2 != null { free(p2); }
+        return 1
+    }
+    
+    *p1 = Person{"Diana", 28, null};
+    *p2 = Person{"Eve", 35, p1}
+    
+    printf("p1: %s, age %d\n", p1.name, p1.age)
+    printf("p2: %s, age %d, friend: %s\n", p2.name, p2.age, p2.friend.name)
+    printf("\n")
+    
+    // Test 8: Array de ponteiros
+    printf("--- Test 8: Array of pointers ---\n")
+    Person** ptr_array = (Person**) malloc(8 * 2)  // sizeof(Person*) = 8
+    if ptr_array == null {
+        printf("Error: malloc failed\n")
+        free(people)
+        free(p1)
+        free(p2)
+        return 1
+    }
+    
+    ptr_array[0] = p1
+    ptr_array[1] = p2
+    
+    for int i = 0; i < 2; i++ {
+        printf("ptr_array[%d]: %s\n", i, ptr_array[i].name)
+    }
+    printf("\n")
+    
+    // Test 9: Modificar via array de ponteiros
+    printf("--- Test 9: Modify through pointer array ---\n")
+    ptr_array[0].age = 29
+    printf("Diana's new age (via ptr_array): %d\n", ptr_array[0].age)
+    printf("Diana's age (via p1): %d\n\n", p1.age)
+    
+    // Test 10: Nested struct access
+    printf("--- Test 10: Deep access ---\n")
+    printf("Eve's friend's name: %s\n", p2.friend.name)
+    printf("Eve's friend's age: %d\n\n", p2.friend.age)
+    
+    // Test 11: Modificar através de referências aninhadas
+    printf("--- Test 11: Modify through nested refs ---\n")
+    p2.friend.age = 30
+    printf("Diana's age after nested modify: %d\n", p1.age)
+    printf("\n")
+    
+    // Test 12: Circular reference modification
+    printf("--- Test 12: Circular reference ---\n")
+    alice.friend.friend.friend.age = 26
+    printf("Alice's age after circular modify: %d\n", alice.age)
+    printf("\n")
+    
+    // Cleanup
+    printf("--- Cleanup ---\n")
+    free(people)
+    free(p1)
+    free(p2)
+    free(ptr_array)
+    printf("All memory freed!\n\n")
+    
+    printf("=== All tests passed! ===\n")
+    return 0
+}

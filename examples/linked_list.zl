@@ -1,0 +1,107 @@
+int printf(string msg, ...);
+void free(void* ptr);
+void* malloc(int size);
+
+struct Node {
+    long value;
+    Node* next = null
+}
+
+// Criar novo nó
+Node* create_node(long val) {
+    Node* node = (Node*) malloc(sizeof Node)
+    if node == null {
+        printf("Error: malloc failed\n")
+        return null
+    }
+    *node = Node{val, null}
+    return node
+}
+
+// Adicionar no início (mais fácil!)
+Node* add(Node* head, long val) {
+    Node* new_node = create_node(val)
+    if new_node == null
+        return head
+    
+    new_node.next = head
+    return new_node
+}
+
+// Imprimir lista (recursivo, sem while!)
+void print_list(Node* node) {
+    if node == null {
+        printf("null\n")
+        return;
+    }
+    
+    printf("%lld -> ", node.value)
+    print_list(node.next)
+}
+
+// Buscar valor (recursivo)
+Node* find(Node* node, long val) {
+    if node == null
+        return null
+    
+    if node.value == val
+        return node
+    
+    return find(node.next, val)
+}
+
+// Contar elementos (recursivo)
+long count(Node* node) {
+    if node == null
+        return 0L
+    
+    return 1 + count(node.next)
+}
+
+// Liberar lista (recursivo)
+void free_list(Node* node) {
+    if node == null
+        return;
+    
+    Node* next = node.next
+    free(node)
+    free_list(next)
+}
+
+int main() {
+    Node* list = null
+    
+    printf("=== Simple Linked List ===\n\n")
+    
+    // Adicionar elementos
+    printf("Adding 10, 20, 30:\n")
+    list = add(list, 10L)
+    list = add(list, 20L)
+    list = add(list, 30L)
+    print_list(list)
+    
+    // Contar
+    printf("\nTotal: %lld elements\n", count(list))
+    
+    // Buscar
+    printf("\nSearching for 20...\n")
+    Node* found = find(list, 20L)
+    if found != null
+        printf("Found: %lld\n", found.value)
+    else
+        printf("Not found\n")
+    
+    printf("\nSearching for 99...\n")
+    found = find(list, 99L)
+    if found != null
+        printf("Found: %lld\n", found.value)
+    else
+        printf("Not found\n")
+    
+    // Cleanup
+    printf("\nFreeing list...\n")
+    free_list(list)
+    printf("Done!\n")
+    
+    return 0
+}

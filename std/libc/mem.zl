@@ -1,0 +1,8 @@
+void* malloc(int size);
+void* calloc(int num, int size);
+void* realloc(void* ptr, int size);
+void free(void* ptr);
+void* memcpy(void* dest, void* src, int n);
+void* memmove(void* dest, void* src, int n);
+void* memset(void* ptr, int value, int n);
+int memcmp(void* ptr1, void* ptr2, int n);

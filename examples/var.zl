@@ -1,0 +1,15 @@
+int printf (string msg, ...);
+
+int main() {
+    int age = 17 | 10
+    float cast = *((f32*) &age)
+    double wow = (double) cast
+
+    wow = 10.10
+    double* ptr = &wow;
+    *ptr = (double)69;
+
+    printf("%f\n", wow)
+    
+    return 0
+}

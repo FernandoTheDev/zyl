@@ -1,0 +1,8 @@
+union Value {
+    string str;
+    int    i32;
+}
+
+int main() {
+    return 0
+}

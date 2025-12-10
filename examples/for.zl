@@ -1,0 +1,25 @@
+int printf (string msg, ...);
+void free (void* ptr);
+void* malloc(int size);
+
+int main() {
+    int size = sizeof int
+    int* integers = (int*) malloc(size * 10)
+
+    if integers == null {
+        printf("mem error.")
+        return 0
+    }
+
+    for int i = 0; i < 10; i++ {
+        integers[i] = i * 10
+    }
+
+    for int i = 0; i < 10; i++ {
+        printf("%d\n", integers[i])
+    } 
+
+    free(integers)
+    
+    return 0
+}

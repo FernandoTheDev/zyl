@@ -1,0 +1,32 @@
+int printf(string msg, ...);
+
+struct OneByte {
+    char c;
+}
+
+struct FourBytes {
+    int i;
+}
+
+struct EightBytes {
+    long l;
+}
+
+struct Mixed {
+    char a;     // 1 byte
+    // 3 bytes padding
+    int b;      // 4 bytes
+    // 0 bytes padding (já alinhado)
+    long c;     // 8 bytes
+    // 0 bytes padding (já alinhado)
+    char* d;    // 8 bytes (pointer)
+}
+
+int main() {
+    printf("OneByte:    %d (expected: 1)\n", sizeof OneByte)
+    printf("FourBytes:  %d (expected: 4)\n", sizeof FourBytes)
+    printf("EightBytes: %d (expected: 8)\n", sizeof EightBytes)
+    printf("Mixed:      %d (expected: 24)\n", sizeof Mixed)
+    
+    return 0
+}

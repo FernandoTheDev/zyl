@@ -1,0 +1,35 @@
+int printf (string msg, ...);
+void free (void* ptr);
+void* malloc(int size);
+
+struct User {
+    int age = 17
+    string name;
+    User* self = null
+}
+
+int main() {
+    User* u1 = (User*) malloc(sizeof User);
+    if u1 == null { printf("mem error!"); return 0 }
+
+    User* u2 = (User*) malloc(sizeof User);
+    if u2 == null { printf("mem error!"); free(u1); return 0 }
+
+    *u1 = User { .name = "Wow" };
+    *u2 = User{67, "SixSeven", u1};
+
+    printf("%s\n", u2.self.name)
+    printf("%s\n", u1.name)
+
+    u1.name = "Fernando"
+    printf("%s\n", u1.name)
+    printf("%d\n", u1.age);
+
+    *(u2.self).name = u2.name
+    printf("%s\n", u1.name)
+
+    free(u1)
+    free(u2)
+    
+    return 0
+}

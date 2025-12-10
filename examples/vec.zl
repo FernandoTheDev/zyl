@@ -1,0 +1,9 @@
+int printf(string msg, ...);
+
+int main() {
+    int[1][2] vec = [
+        [60], [9]
+    ]
+    printf("%d\n", vec[0][0] + vec[0][1])
+    return 0
+}

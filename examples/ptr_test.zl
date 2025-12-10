@@ -1,0 +1,36 @@
+int printf(string msg, ...);
+void* malloc(int size);
+void free(void* ptr);
+
+struct User {
+    string name;
+    int id;
+}
+
+int main() {
+    int size = sizeof User
+    printf("Sizeof User: %d\n", size)
+
+    User* users = (User*) malloc(size * 3)
+    
+    users[0] = User{"Alice", 1}
+    users[1] = User{"Bob", 2}
+    users[2] = User{"Charlie", 3}
+
+    User* walker = users
+    
+    printf("First: %s\n", walker.name) // Alice
+    
+    walker = walker + 1 // Deve pular 'size' bytes
+    printf("Second: %s\n", walker.name) // Bob
+    
+    walker = walker + 1
+    printf("Third: %s\n", walker.name) // Charlie
+    
+    walker = walker - 2
+    printf("Back to First: %s\n", walker.name)
+
+    free(users)
+
+    return 0
+}

@@ -1,0 +1,13 @@
+import std.libc.io : { printf }
+import std.libc.math : { sqrt, pow }
+
+int main() {
+    double x = 16.0D
+    double root = sqrt(x)
+    double square = pow(x, 2.0)
+    
+    printf("sqrt(%.1f) = %.1f\n", x, root)
+    printf("pow(%.1f, 2) = %.1f\n", x, square)
+    
+    return 0
+}

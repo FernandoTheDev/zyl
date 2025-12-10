@@ -1,0 +1,27 @@
+import std.libc.io : { printf }
+import std.libc.mem : { malloc, free }
+
+struct User {
+    string name; // offset 0, size 8
+    int id;      // offset 8, size 4
+}
+
+int main() {
+    printf("=== Hacker Test ===\n")
+    User* u = (User*) malloc(sizeof User)
+    u.name = "Neo"
+    u.id = 101
+
+    void* raw = (void*) u
+    char* byte_ptr = (char*) raw
+    byte_ptr = byte_ptr + 8
+    int* id_ptr = (int*) byte_ptr
+    
+    printf("Hacked ID read: %d\n", *id_ptr); // Deve ser 101
+    *id_ptr = 999
+    
+    printf("Real User ID: %d\n", u.id) // Deve ser 999
+    free(u)
+
+    return 0
+}

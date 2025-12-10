@@ -1,0 +1,20 @@
+int printf(string msg, ...);
+int strcmp(string a, string b);
+
+int main(int argc, string* argv) {
+    if argc < 2 {
+        printf("Usage: %s <command>\n", argv[0])
+        return 1
+    }
+    
+    string cmd = argv[1]
+    
+    if strcmp(cmd, "help") == 0
+        printf("Help: ...\n")
+    else if strcmp(cmd, "version") == 0
+        printf("Version 1.0\n")
+    else
+        printf("Unknown command: %s\n", cmd)
+    
+    return 0
+}

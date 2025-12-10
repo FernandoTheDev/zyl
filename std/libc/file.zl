@@ -1,0 +1,11 @@
+void* fopen(string filename, string mode);
+int fclose(void* stream);
+int fread(void* ptr, int size, int count, void* stream);
+int fwrite(void* ptr, int size, int count, void* stream);
+int fseek(void* stream, int offset, int whence);
+int ftell(void* stream);
+void rewind(void* stream);
+int feof(void* stream);
+int ferror(void* stream);
+int fflush(void* stream);
+int fprintf(void* file, string fmt, ...);

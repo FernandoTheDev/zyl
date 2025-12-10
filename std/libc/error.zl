@@ -1,0 +1,2 @@
+void perror(char* str);
+char* strerror(int errnum);

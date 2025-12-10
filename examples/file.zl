@@ -1,0 +1,15 @@
+import std.libc.io
+import std.libc.file
+
+int main() {
+    void* f = fopen("output.txt", "w")
+    if f == null
+        return 1
+    
+    fprintf(f, "Hello from ZYL!\n")
+    fclose(f)
+
+    printf(":)\n")
+    
+    return 0
+}

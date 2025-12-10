@@ -1,0 +1,37 @@
+// import std.io : { println }
+// import std.mem : { malloc, free }
+
+int printf (string msg, ...);
+void free (void* ptr);//
+void* malloc(int size);
+
+int sum(int x, int y) {
+    return x + y
+}
+
+int main() {
+    int* a = (int*) malloc(sizeof int)
+
+    if (a == null) {
+        // error
+        return 0
+    }
+
+    int* b = (int*) malloc(sizeof int)
+
+    if (b == null) {
+        // error
+        free(a)
+        return 0
+    }
+
+    *a = 60;
+    *b = (int) 9.1;
+
+    printf("%d\n", sum(*a, *b))
+
+    free(a)
+    free(b)
+    
+    return 0
+}

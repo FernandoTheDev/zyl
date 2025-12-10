@@ -1,0 +1,77 @@
+import std.libc.io : { printf }
+import std.libc.pthread : { pthread_t, pthread_create, pthread_join, pthread_mutex_lock, pthread_mutex_unlock, pthread_mutex_init, pthread_cond_t, pthread_cond_init, pthread_cond_wait, pthread_cond_signal }
+import std.libc.mem : { malloc, free }
+
+struct Queue {
+    int* items;
+    int head;
+    int tail;
+    int size;
+    int count;
+    pthread_mutex_t mutex;
+    pthread_cond_t not_empty;
+    pthread_cond_t not_full;
+}
+
+void* producer(void* arg) {
+    Queue* q = (Queue*) arg
+    for int i = 0; i < 100; i++ {
+        pthread_mutex_lock(&(q.mutex))
+        
+        while q.count == q.size
+            pthread_cond_wait(&(q.not_full), &(q.mutex))
+        
+        q.items[q.tail] = i
+        q.tail = (q.tail + 1) % q.size
+        q.count = q.count + 1
+        
+        pthread_cond_signal(&(q.not_empty))
+        pthread_mutex_unlock(&(q.mutex))
+    }
+    return null
+}
+
+void* consumer(void* arg) {
+    Queue* q = (Queue*) arg
+    int consumed = 0
+    while consumed < 100 {
+        pthread_mutex_lock(&(q.mutex))
+        
+        while q.count == 0
+            pthread_cond_wait(&(q.not_empty), &(q.mutex))
+        
+        int item = q.items[q.head]
+        q.head = (q.head + 1) % q.size
+        q.count = q.count - 1
+        printf("Consumed: %d\n", item)
+        consumed = consumed + 1
+        
+        pthread_cond_signal(&(q.not_full))
+        pthread_mutex_unlock(&(q.mutex))
+    }
+    return null
+}
+
+int main() {
+    Queue* q = (Queue*) malloc(sizeof Queue)
+    q.size = 10
+    q.items = (int*) malloc(q.size * sizeof int)
+    q.head = 0
+    q.tail = 0
+    pthread_mutex_init(&(q.mutex), null)
+    pthread_cond_init(&(q.not_empty), null)
+    pthread_cond_init(&(q.not_full), null)
+    
+    pthread_t prod_tid;
+    pthread_t cons_tid;
+    pthread_create(&prod_tid, null, producer, (void*) q)
+    pthread_create(&cons_tid, null, consumer, (void*) q)
+    
+    pthread_join(prod_tid, null)
+    pthread_join(cons_tid, null)
+    
+    free(q.items)
+    free(q)
+    
+    return 0
+}

@@ -1,0 +1,53 @@
+int printf(string msg, ...);
+
+int main() {
+    printf("=== Matrix Multiplication Test (3x3) ===\n")
+
+    int[3][3] A;
+    int[3][3] B;
+    int[3][3] C;
+
+    printf("Initializing...\n")
+    
+    for int i = 0; i < 3; i++ {
+        for int j = 0; j < 3; j++ {
+            A[i][j] = i + j
+            
+            if i == j
+                B[i][j] = 2
+            else
+                B[i][j] = 0
+            
+            C[i][j] = 0
+        }
+    }
+
+    printf("Multiplying...\n")
+
+    for int i = 0; i < 3; i++ {
+        for int j = 0; j < 3; j++ {
+            int sum = 0
+            for int k = 0; k < 3; k++ {
+                sum = sum + (A[i][k] * B[k][j])
+            }
+            C[i][j] = sum
+        }
+    }
+
+    printf("Result Matrix C:\n")
+    for int i = 0; i < 3; i++ {
+        for int j = 0; j < 3; j++ {
+            printf("%d ", C[i][j])
+        }
+        printf("\n")
+    }
+
+    if C[2][2] == 8 {
+        printf("\nSUCCESS: Calculation seems correct.\n")
+    }
+    else {
+        printf("\nFAILURE: Calculation wrong.\n")
+    }
+
+    return 0
+}

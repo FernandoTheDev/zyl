@@ -1,0 +1,49 @@
+// Thread types
+type pthread_t = long;
+type pthread_attr_t = long;
+type pthread_fn = (void*): void*
+
+// Thread creation/management
+int pthread_create(pthread_t* thread, pthread_attr_t* attr, 
+                   pthread_fn start_routine, void* arg);
+int pthread_join(pthread_t thread, void** retval);
+int pthread_detach(pthread_t thread);
+void pthread_exit(void* retval);
+pthread_t pthread_self();
+
+// Mutex
+type pthread_mutex_t = long[40];  // Size depends on platform
+int pthread_mutex_init(pthread_mutex_t* mutex, void* attr);
+int pthread_mutex_destroy(pthread_mutex_t* mutex);
+int pthread_mutex_lock(pthread_mutex_t* mutex);
+int pthread_mutex_unlock(pthread_mutex_t* mutex);
+int pthread_mutex_trylock(pthread_mutex_t* mutex);
+
+// Condition variables
+type pthread_cond_t = long[48];
+int pthread_cond_init(pthread_cond_t* cond, void* attr);
+int pthread_cond_destroy(pthread_cond_t* cond);
+int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex);
+int pthread_cond_signal(pthread_cond_t* cond);
+int pthread_cond_broadcast(pthread_cond_t* cond);
+
+// Spinlocks
+type pthread_spinlock_t = int;
+int pthread_spin_init(pthread_spinlock_t* lock, int pshared);
+int pthread_spin_destroy(pthread_spinlock_t* lock);
+int pthread_spin_lock(pthread_spinlock_t* lock);
+int pthread_spin_unlock(pthread_spinlock_t* lock);
+
+// Barriers
+type pthread_barrier_t = long[32];
+int pthread_barrier_init(pthread_barrier_t* barrier, void* attr, int count);
+int pthread_barrier_destroy(pthread_barrier_t* barrier);
+int pthread_barrier_wait(pthread_barrier_t* barrier);
+
+// Read-write locks
+type pthread_rwlock_t = long[56];
+int pthread_rwlock_init(pthread_rwlock_t* rwlock, void* attr);
+int pthread_rwlock_destroy(pthread_rwlock_t* rwlock);
+int pthread_rwlock_rdlock(pthread_rwlock_t* rwlock);
+int pthread_rwlock_wrlock(pthread_rwlock_t* rwlock);
+int pthread_rwlock_unlock(pthread_rwlock_t* rwlock);

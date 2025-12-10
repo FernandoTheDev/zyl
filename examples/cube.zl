@@ -1,0 +1,133 @@
+import std.libc.io : { printf, putchar, fflush }
+import std.libc.math : { sin, cos }
+import std.libc.mem : { malloc, memset, free }
+
+// Configurações da Tela
+int width = 160
+int height = 50
+int backgroundASCII = 32
+
+// Buffers Globais
+double* zBuffer;
+char* buffer;
+
+// Parâmetros do Cubo
+double A = 0.0
+double B = 0.0
+double C = 0.0
+double cubeWidth = 10.0
+int distanceFromCam = 30
+double K1 = 40.0
+double incrementSpeed = 0.6
+
+double x;
+double y;
+double z;
+double ooz;
+
+double calculateX(double i, double j, double k, double angleA, double angleB, double angleC) {
+    double sA = sin(angleA)
+    double cA = cos(angleA)
+    double sB = sin(angleB)
+    double cB = cos(angleB)
+    double sC = sin(angleC)
+    double cC = cos(angleC)
+    
+    return j * sA * sB * cC - k * cA * sB * cC + 
+           j * cA * sC + k * sA * sC + i * cB * cC
+}
+
+double calculateY(double i, double j, double k, double angleA, double angleB, double angleC) {
+    double sA = sin(angleA)
+    double cA = cos(angleA)
+    double sB = sin(angleB)
+    double cB = cos(angleB)
+    double sC = sin(angleC)
+    double cC = cos(angleC)
+    
+    return j * cA * cC + k * sA * cC - 
+           j * sA * sB * sC + k * cA * sB * sC - 
+           i * cB * sC
+}
+
+double calculateZ(double i, double j, double k, double angleA, double angleB) {
+    double sA = sin(angleA)
+    double cA = cos(angleA)
+    double sB = sin(angleB)
+    double cB = cos(angleB)
+    
+    return k * cA * cB - j * sA * cB + i * sB
+}
+
+void calculateForSurface(double cubeX, double cubeY, double cubeZ, int ch) {
+    x = calculateX(cubeX, cubeY, cubeZ, A, B, C)
+    y = calculateY(cubeX, cubeY, cubeZ, A, B, C)
+    z = calculateZ(cubeX, cubeY, cubeZ, A, B) + distanceFromCam
+
+    if z <= 0.001 {
+        return;
+    }
+
+    ooz = 1.0 / z
+
+    double w = (double)width / 2
+    double h = (double)height / 2
+    int xp = (int) (w + K1 * ooz * x * 2.0)
+    int yp = (int) (h + K1 * ooz * y)
+
+    int idx = xp + yp * width
+
+    if idx >= 0 && idx < width * height {
+        if ooz > zBuffer[idx] {
+            zBuffer[idx] = ooz
+            buffer[idx] = ch
+        }
+    }
+}
+
+int main() {
+    printf("\x1b[2J")
+
+    int bufferSize = width * height
+    buffer = (char*) malloc(bufferSize)
+    zBuffer = (double*) malloc(bufferSize * 8)
+
+    while true {
+        memset(buffer, backgroundASCII, bufferSize)
+        memset(zBuffer, 0, bufferSize * 8)
+
+        for double i = -cubeWidth; i < cubeWidth; i = i + incrementSpeed {
+            for double j = -cubeWidth; j < cubeWidth; j = j + incrementSpeed {
+                calculateForSurface(i, cubeWidth, j, 36)
+                calculateForSurface(cubeWidth, j, i, 126)
+                calculateForSurface(-cubeWidth, j, i, 35)
+                calculateForSurface(-i, -cubeWidth, -j, 59)
+                calculateForSurface(i, j, cubeWidth, 43)
+                calculateForSurface(i, j, -cubeWidth, 64)
+            }
+        }
+
+        putchar(27)  // ESC
+        printf("[2J")
+        putchar(27)
+        printf("[H")
+        fflush(null)  // força flush do stdout
+
+        for int k = 0; k < bufferSize; k++ {
+            if k % width == 0 && k != 0 {
+                putchar(10)
+            }
+            putchar(buffer[k])
+        }
+
+        A = A + 0.05
+        B = B + 0.05
+        C = C + 0.01
+
+        usleep(16000)
+    }
+
+    free(buffer)
+    free(zBuffer)
+    return 0
+}

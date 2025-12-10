@@ -1,0 +1,18 @@
+{
+	"name": "zyl",
+	"copyright": "Copyright © 2025, Fernando Dev",
+	"description": "The ZYL Programming Language",
+	"license": "MIT",
+	"targetName": "zyl",
+	"targetType": "executable",
+	"authors": [
+		"Fernando Dev"
+	],
+	"libs": ["LLVM-18"],
+	"lflags": [
+		"-L/usr/lib64/llvm18/lib",
+		"-L-rpath=/usr/lib64/llvm18/lib",
+		"-ldl"
+	],
+	"dflags": ["-I/usr/lib64/llvm18/include"]
+}

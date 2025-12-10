@@ -1,0 +1,19 @@
+version "linux" {
+    import std.libc.io : { printf }
+    bool LINUX = true 
+    bool WINDOWS = false
+} else version "windows" {
+    import std.libc.mem
+    bool LINUX = false
+    bool WINDOWS = true
+}
+
+int main() {
+    if LINUX
+        printf("Hello from Linux!\n")
+
+    if WINDOWS
+        printf("Hello from Windows!\n")
+    
+    return 0
+}

@@ -1,0 +1,8 @@
+import std.libc.io : { printf }
+
+int x = 69
+
+int main() {
+    printf("%d\n", x)
+    return 0
+}

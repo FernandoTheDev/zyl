@@ -1,0 +1,10 @@
+long syscall(long num, ...);
+
+int main() {
+    string msg = "hi\n";
+    int x = 69
+    char z = (char)x
+    syscall(1L, 1, &z, sizeof x);
+    syscall(60L, 0);         // exit(0)
+    return 0;
+}

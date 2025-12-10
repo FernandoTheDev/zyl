@@ -1,0 +1,239 @@
+// calc.x - Simple Calculator with Lexer + Parser
+int printf(string msg, ...);
+void* malloc(int size);
+void free(void* ptr);
+int strlen(string s);
+int strcmp(string a, string b);
+
+// ============================================================
+// TOKEN TYPES
+// ============================================================
+struct Token {
+    int kind;     // 0=NUMBER, 1=PLUS, 2=MINUS, 3=STAR, 4=SLASH, 5=LPAREN, 6=RPAREN, 7=EOF
+    double value; // For NUMBER tokens
+    
+    void print(Token* self) {
+        if self.kind == 0
+            printf("NUMBER(%f)\n", self.value)
+        else if self.kind == 1
+            printf("PLUS\n")
+        else if self.kind == 2
+            printf("MINUS\n")
+        else if self.kind == 3
+            printf("STAR\n")
+        else if self.kind == 4
+            printf("SLASH\n")
+        else if self.kind == 5
+            printf("LPAREN\n")
+        else if self.kind == 6
+            printf("RPAREN\n")
+        else if self.kind == 7
+            printf("EOF\n")
+    }
+}
+
+// ============================================================
+// LEXER
+// ============================================================
+struct Lexer {
+    string input;
+    int pos;
+    int length;
+    
+    void init(Lexer* self, string input) {
+        self.input = input
+        self.pos = 0
+        self.length = strlen(input)
+    }
+    
+    char current(Lexer* self) {
+        if self.pos >= self.length
+            return '\0'
+        return self.input[self.pos]
+    }
+    
+    void advance(Lexer* self) {
+        self.pos = self.pos + 1
+    }
+    
+    void skip_whitespace(Lexer* self) {
+        while self.current() == ' ' || self.current() == '\t' || self.current() == '\n'
+            self.advance()
+    }
+    
+    double read_number(Lexer* self) {
+        double result = 0.0
+        double decimal = 0.0
+        int has_decimal = 0
+        double divisor = 10.0
+        
+        // Integer part
+        while self.current() >= '0' && self.current() <= '9' {
+            result = result * 10.0 + (double)(int)(self.current() - '0')
+            self.advance()
+        }
+        
+        // Decimal part
+        if self.current() == '.' {
+            self.advance()
+            has_decimal = 1
+            
+            while self.current() >= '0' && self.current() <= '9' {
+                decimal = decimal + ((double)(int)(self.current() - '0')) / divisor
+                divisor = divisor * 10.0
+                self.advance()
+            }
+        }
+        
+        return result + decimal
+    }
+    
+    Token next_token(Lexer* self) {
+        self.skip_whitespace()
+        
+        char c = self.current()
+        
+        // EOF
+        if c == '\0'
+            return Token{7, 0.0}
+        
+        // Number
+        if c >= '0' && c <= '9' {
+            double val = self.read_number()
+            return Token{0, val}
+        }
+        
+        // Operators
+        self.advance()
+        
+        if c == '+'
+            return Token{1, 0.0}
+        else if c == '-'
+            return Token{2, 0.0}
+        else if c == '*'
+            return Token{3, 0.0}
+        else if c == '/'
+            return Token{4, 0.0}
+        else if c == '('
+            return Token{5, 0.0}
+        else if c == ')'
+            return Token{6, 0.0}
+        
+        printf("Unknown character: %c\n", c)
+        return Token{7, 0.0}
+    }
+}
+
+struct Parser {
+    Lexer* lexer;
+    Token current_token;
+    
+    void init(Parser* self, Lexer* lexer) {
+        self.lexer = lexer
+        self.current_token = lexer.next_token()
+    }
+    
+    void eat(Parser* self, int token_kind) {
+        if self.current_token.kind == token_kind
+            self.current_token = self.lexer.next_token()
+        else
+            printf("Syntax error: expected token kind %d\n", token_kind)
+    }
+    
+    double factor(Parser* self) {
+        Token tok = self.current_token
+        
+        if tok.kind == 0 {  // NUMBER
+            self.eat(0)
+            return tok.value
+        }
+        else if tok.kind == 5 {  // LPAREN
+            self.eat(5)
+            double result = self.expr()
+            self.eat(6)  // RPAREN
+            return result
+        }
+        
+        printf("Syntax error in factor\n")
+        return 0.0
+    }
+    
+    double term(Parser* self) {
+        double result = self.factor()
+        
+        while self.current_token.kind == 3 || self.current_token.kind == 4 {
+            Token tok = self.current_token
+            
+            if tok.kind == 3 {  // STAR
+                self.eat(3)
+                result = result * self.factor()
+            }
+            else if tok.kind == 4 {  // SLASH
+                self.eat(4)
+                double divisor = self.factor()
+                if divisor == 0.0 {
+                    printf("Error: Division by zero\n")
+                    return 0.0
+                }
+                result = result / divisor
+            }
+        }
+        
+        return result
+    }
+    
+    double expr(Parser* self) {
+        double result = self.term()
+        
+        while self.current_token.kind == 1 || self.current_token.kind == 2 {
+            Token tok = self.current_token
+            
+            if tok.kind == 1 {  // PLUS
+                self.eat(1)
+                result = result + self.term()
+            }
+            else if tok.kind == 2 {  // MINUS
+                self.eat(2)
+                result = result - self.term()
+            }
+        }
+        
+        return result
+    }
+    
+    double parse(Parser* self) {
+        return self.expr()
+    }
+}
+
+
+int main() {
+    Lexer* lexer = (Lexer*) malloc(sizeof Lexer);
+
+    if (lexer == null) {
+        printf("mem error!\n");
+        return 0;
+    }
+
+    string src = "((2 + 3) * (4 - 1)) / 3 + (100 / 4 + 3)"
+    lexer.init(src)
+
+    Parser* parser = (Parser*) malloc(sizeof Parser)
+
+    if (parser == null) {
+        free(lexer)
+        printf("mem error in parser!\n");
+        return 0;
+    }
+
+    parser.init(lexer)
+    
+    double r = parser.parse()
+    printf("Result: %f\n", r)
+
+    free(parser)
+    free(lexer)
+    
+    return 0
+}
+

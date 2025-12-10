@@ -1,0 +1,19 @@
+import std.libc.io
+import std.libc.mem
+
+struct Result {
+    int result;
+}
+
+Result sum(int x, int y) {
+    return Result{x + y}
+}
+
+int main() {
+    int* x = (int*) malloc(sizeof int);
+    *x = 60
+    Result r = sum(*x, 9)
+    printf("%d\n", r.result)
+    free(x)
+    return 0
+}

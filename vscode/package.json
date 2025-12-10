@@ -1,0 +1,37 @@
+{
+  "name": "zyl-language",
+  "displayName": "ZYL Programming Language",
+  "description": "The ZYL Programming Language",
+  "version": "0.0.9",
+  "publisher": "FarpyOrganization",
+  "icon": "./imagens/dark.png",
+  "engines": {
+    "vscode": "^1.106.1"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "zyl-language",
+      "aliases": ["zyl-language"],
+      "extensions": [".zl"],
+      "configuration": "./language-configuration.json",
+      "icon": {
+        "light": "./imagens/light.png",
+        "dark": "./imagens/dark.png"
+      }
+    }],
+    "grammars": [{
+      "language": "zyl-language",
+      "scopeName": "source.zl",
+      "path": "./syntaxes/zyl-language.tmLanguage.json"
+    }],
+    "snippets": [
+      {
+        "language": "zyl-language",
+        "path": "./snippets/snippets.json"
+      }
+    ]
+  }
+}

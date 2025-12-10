@@ -1,0 +1,17 @@
+.dub
+docs.json
+__dummy.html
+/xc
+xc.so
+xc
+xc.dylib
+xc.dll
+xc.a
+xc.lib
+xc-test-*
+*.exe
+*.pdb
+*.o
+*.out
+*.obj
+*.lst

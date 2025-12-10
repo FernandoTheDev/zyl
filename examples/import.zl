@@ -1,0 +1,6 @@
+import std.libc.io
+
+int main() {
+    printf("Hello World!\n")
+    return 0
+}

@@ -1,0 +1,24 @@
+int printf (string msg, ...);
+void free (void* ptr);
+void* malloc (int size);
+
+int main() {
+    int size = sizeof string*;
+    string* names = (string*) malloc(size * 2)
+
+    if names == null {
+        printf("error!")
+        return 0
+    }
+
+    names[0] = "Fernando"
+    names[1] = "Cabral"
+    int idx = 0
+
+    printf("Name: %s\n", names[idx << 1 >> 1])
+    printf("Surname: %s\n", names[idx << 1 >> 1 + 1])
+
+    free(names)
+
+    return 0
+}

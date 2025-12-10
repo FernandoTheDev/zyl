@@ -1,0 +1,41 @@
+int printf(string msg, ...);
+void* malloc(int size);
+void free(void* ptr);
+
+struct User {
+    string name;
+}
+
+int main() {
+    printf("=== Double Pointer Test ===\n")
+
+    // 1. Criar um usuário no Heap
+    User* u1 = (User*) malloc(sizeof User)
+    u1.name = "Original"
+
+    // 2. Criar um ponteiro duplo na Stack
+    // 'ptr_to_ptr' guarda o endereço da variável 'u1' (que está na stack)
+    User** pp = &u1
+    
+    // 3. Leitura via ponteiro duplo (**pp)
+    // Desembrulha 2 vezes: pp -> u1 -> struct -> name
+    // Nota: Dependendo da sua sintaxe, talvez precise de parenteses (*pp).name
+    // ou se o ponto (.) faz auto-deref, pp.name talvez funcione (mas seria estranho).
+    // Vamos testar o acesso manual:
+    User* temp = *pp
+    printf("Via double pointer: %s\n", temp.name)
+
+    // 4. Escrita via ponteiro duplo
+    // Vamos mudar para onde 'u1' aponta, sem tocar em 'u1' diretamente
+    User* u2 = (User*) malloc(sizeof User)
+    u2.name = "Hacked";
+    
+    // *pp é o L-Value de 'u1'. Estamos escrevendo em 'u1' indiretamente.
+    *pp = u2
+
+    printf("Var 'u1' now points to: %s\n", u1.name)
+
+    free(u1)
+
+    return 0
+}

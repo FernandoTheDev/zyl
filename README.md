@@ -26,7 +26,7 @@ zyl hello.zyl --of hello
 ## Example
 
 ```c
-int printf(string msg, ...);
+import std.libc.stdio : { printf }
 
 struct Person {
     string name;

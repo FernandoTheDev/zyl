@@ -1,30 +1,32 @@
+<img src="./vscode/imagens/dark.png" width="200" alt="logo"/>
+
 # The ZYL Programming Language
 
 A modern systems programming language with C-like syntax and zero-cost abstractions.
 
 ## Features
 
-- 🚀 **Performance**: C-level speed, compiles to native code via LLVM
-- 🎯 **Simple**: Clean syntax without complexity
-- 🔧 **Structs**: With methods and default values
-- 🔄 **Memory**: Manual control with malloc/free
-- ⚡ **Fast compilation**: Compiles large projects in milliseconds
+- **Performance**: C-level speed, compiles to native code via LLVM
+- **Simple**: Clean syntax without complexity
+- **Structs**: With methods and default values
+- **Memory**: Manual control with malloc/free
+- **Fast compilation**: Compiles large projects in milliseconds
 
 ## Quick Start
 
 ```bash
 # Build compiler
-dub build --compiler=ldc2
+chmod +x ./build.sh; ./build.sh
 
 # Compile and run
-./zyl hello.zyl
-./a.out
+zyl hello.zyl --of hello
+./hello
 ```
 
 ## Example
 
 ```c
-int printf(string msg, ...);
+import std.libc.stdio : { printf }
 
 struct Person {
     string name;
@@ -36,6 +38,7 @@ struct Person {
 }
 
 int main() {
+    // Person p = Person{.age = 25, .name = "Alice"}
     Person p = Person{"Alice", 25}
     p.greet()
     return 0
@@ -51,7 +54,7 @@ int main() {
 
 ## Performance
 
-```
+```md
 Benchmark: 100M iterations
 Zyl:     0.08s  ⚡
 Clang: 0.08s  (identical!)

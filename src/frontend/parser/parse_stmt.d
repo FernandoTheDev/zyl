@@ -23,6 +23,9 @@ mixin template ParseStmt()
             return new BrkOrCntStmt(false, this.advance().loc);
         case TokenKind.Import:
             return parseImportStmt();
+        case TokenKind.Defer:
+            advance();
+            return new DeferStmt(this.parseExpression());
         default:
             return null;
         }
@@ -186,7 +189,7 @@ mixin template ParseStmt()
 
     Node[] parseBody(bool uniqueStmt = false)
     {
-        Node[] body_;
+        Node[] body_ = [];
         if (!this.check(TokenKind.LBrace) && !uniqueStmt)
         {
             reportError("'{' was expected to start the body.", this.peek().loc);

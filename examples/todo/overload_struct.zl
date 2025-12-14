@@ -1,0 +1,27 @@
+import std.libc.io : { printf }
+
+struct Int {
+    int val;
+    // int
+    int opAdd(Int* self, int rhs) { return self.val + rhs }
+    int opAddRight(Int* self, int lhs) { return self.val + lhs }
+    int opAddAssign(Int* self, int rhs) { self.val += rhs; return self.val }
+    // double
+    int opAdd(Int* self, double rhs) { return self.val + (int)rhs }
+    int opAddRight(Int* self, double lhs) { return self.val + (int)lhs }
+    int opAddAssign(Int* self, double rhs) { self.val += (int)rhs; return self.val }
+    // left
+    // opAdd, opSub, opMul, opDiv, opMod, opEquals, opNotEquals, opLess, opGreater, opLessEqual, opGreaterEqual
+    // right
+    // opAddRight, opSubRight, opMulRight, opDivRight, opModRight, opEqualsRight, opNotEqualsRight, opLessRight, opGreaterRight, 
+    // opLessEqualRight, opGreaterEqualRight
+}
+
+int main() {
+    Int i = Int{0}
+    i += 3D * 3D
+    i.val = i + 30
+    i.val = 30D + i
+    printf("%d\n", i.val)
+    return 0
+}

@@ -35,7 +35,7 @@
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control.zyl-language",
-				"match": "\\b(import|for|while|do|return|if|else|sizeof|struct|union|enum|int|i32|long|i64|float|f32|double|f64|i1|bool|char|string|void|version|break|continue|type)\\b"
+				"match": "\\b(import|for|while|do|return|if|else|sizeof|struct|union|enum|int|i32|long|i64|float|f32|double|f64|i1|bool|char|string|void|version|break|continue|type|union|enum|defer|@nomangle)\\b"
 			}]
 		},
 		"constants": {
@@ -161,16 +161,16 @@
 			]
 		},
 		"functions": {
-			"patterns": [{
-				"name": "entity.name.function.zyl-language",
-				"match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()"
-			}]
+		    "patterns": [{
+		        "name": "entity.name.function.zyl-language",
+		        "match": "(?<![a-zA-Z0-9_@])[@a-zA-Z_][@a-zA-Z0-9_]*\\s*(?=\\()"
+		    }]
 		},
 		"identifiers": {
-			"patterns": [{
-				"name": "variable.other.zyl-language",
-				"match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
-			}]
+		    "patterns": [{
+		        "name": "variable.other.zyl-language",
+		        "match": "(?<![a-zA-Z0-9_@])[@a-zA-Z_][@a-zA-Z0-9_]*(?![a-zA-Z0-9_@])"
+		    }]
 		}
 	}
 }

@@ -1,0 +1,8 @@
+// TODO
+int main() {
+    // array associativo não tem inicialização prévia
+    int[string] map;
+    // inspiração de dlang totalmente
+    map["fernando"] = 100
+    return 0
+}

@@ -13,10 +13,92 @@ mixin template ParseDecl()
         case TokenKind.Struct:
             return this.parseStructDecl();
 
+        case TokenKind.Enum:
+            return this.parseEnumDecl();
+
+        case TokenKind.Union:
+            return this.parseUnionDecl();
+
         default:
             reportError("Unrecognized statement.", this.peek().loc);
             return null;
         }
+    }
+
+    Node parseEnumDecl()
+    {
+        Loc start = advance().loc;
+        
+        Token idToken = this.consume(TokenKind.Identifier, "Expected an identifier for enum name.");
+        string id = idToken.value.get!string;
+        bool noMangle;
+
+        if (this.match([TokenKind.NoMangle]))
+            noMangle = true;
+        
+        this.consume(TokenKind.LBrace, "Expected '{' after enum name.");
+        
+        int[string] members;
+        int currentValue = 0; // Contador automático para valores implícitos
+
+        while (!this.check(TokenKind.RBrace) && !this.isAtEnd())
+        {
+            Token memberId = this.consume(TokenKind.Identifier, "Expected enum member name.");
+            string memberName = memberId.value.get!string;
+            
+            if (this.match([TokenKind.Equals]))
+            {
+                Node expr = this.parseExpression();    
+                if (auto intLit = cast(IntLit) expr)
+                    currentValue = intLit.value.get!int;
+                else
+                    reportError("Enum member value must be an integer literal.", expr.loc);
+            }
+            
+            members[memberName] = currentValue;
+            currentValue++; // Prepara para o próximo (auto-incremento)
+            
+            // Consome vírgula opcional (permite trailing comma)
+            this.match([TokenKind.Comma]);
+        }
+        
+        this.consume(TokenKind.RBrace, "Expected '}' after enum body.");
+        
+        if (!registry.typeExists(id))
+            registry.registerType(id, new EnumType(id, members));
+            
+        return new EnumDecl(id, members, this.getLoc(start, this.previous().loc), noMangle);
+    }
+
+    Node parseUnionDecl()
+    {
+        Loc start = advance().loc; // consome 'union'
+        string id = this.consume(TokenKind.Identifier, "Expected an identifier for union name.").value.get!string;
+        bool noMangle;
+
+        if (this.match([TokenKind.NoMangle]))
+            noMangle = true;
+    
+        StructField[] fields;
+        
+        if (!registry.typeExists(id))
+            registry.registerType(id, new UnionType(id, fields)); 
+            
+        this.consume(TokenKind.LBrace, "Expected '{' after union name.");
+        while (!this.isAtEnd() && !this.check(TokenKind.RBrace))
+        {
+            Node node = this.parse();
+            if (node.kind == NodeKind.VarDecl)
+            {
+                VarDecl var = cast(VarDecl) node;
+                fields ~= StructField(var.id, var.type, var.resolvedType, var.value.get!Node, var.loc);
+                continue;
+            }
+            reportError("Only field declarations are allowed inside a union.", node.loc);
+        }
+
+        this.consume(TokenKind.RBrace, "Expected '}' after union body.");
+        return new UnionDecl(id, fields, this.getLoc(start, this.previous().loc), noMangle);
     }
 
     StructDecl parseStructDecl()
@@ -24,8 +106,13 @@ mixin template ParseDecl()
         // struct User { string name; int age = 17; User next = null; }
         Loc start = advance().loc;
         string id = this.consume(TokenKind.Identifier, "Expected an identifier to struct name.").value.get!string;
+        bool noMangle;
+
+        if (this.match([TokenKind.NoMangle]))
+            noMangle = true;
+
         StructField[] fields;
-        StructMethod[] methods;
+        StructMethod[][string] methods;
         // precisa criar um tipo do usuario temporariamente pra conseguir identificar isso como uma struct
         // o typeresolver corrigirá isso no futuro
         if (!registry.typeExists(id))
@@ -49,7 +136,7 @@ mixin template ParseDecl()
             {
                 // vai virar um método
                 FuncDecl func = cast(FuncDecl) node;
-                methods ~= StructMethod(func, func.name == "this", func.loc);
+                methods[func.name] ~= StructMethod(func, func.name == "this", func.loc);
                 continue;
             }
 
@@ -57,12 +144,12 @@ mixin template ParseDecl()
         }
 
         this.consume(TokenKind.RBrace, "Expected '}' after struct body.");
-        return new StructDecl(id, fields, methods, this.getLoc(start, this.previous().loc));
+        return new StructDecl(id, fields, methods, this.getLoc(start, this.previous().loc), noMangle);
     }
 
     FuncDecl parseFuncDecl(TypeExpr funcType, Token id)
     {
-        bool isVarArg;
+        bool isVarArg, isExtern, noMangle;
         FuncArgument[] arguments;
         this.consume(TokenKind.LParen, "Expected '(' after the function name.");
         while (!this.check(TokenKind.RParen))
@@ -87,12 +174,16 @@ mixin template ParseDecl()
         }
         this.consume(TokenKind.RParen, "Expected ')' after the function arguments.");
 
-        Node[] body;
+        if (this.match([TokenKind.NoMangle]))
+            noMangle = true;
+
+        Node[] body = [];
         if (this.match([TokenKind.SemiColon]))
-            body = null;
+            isExtern = true;
         else
             body = parseBody();
-        return new FuncDecl(id.value.get!string, arguments, body, funcType, id.loc, isVarArg);
+
+        return new FuncDecl(id.value.get!string, arguments, body, funcType, id.loc, isVarArg, isExtern, noMangle);
     }
 
     TypeDecl parseTypeDecl()

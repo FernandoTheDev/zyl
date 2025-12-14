@@ -1,0 +1,2 @@
+module frontend.semantic.templates;
+

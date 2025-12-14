@@ -19,6 +19,8 @@ class AstLowerer {
         foreach (node; ast.body)
             if (node.kind == NodeKind.StructDecl)
                 calculateStructLayout(cast(StructDecl)node);
+            else if (node.kind == NodeKind.UnionDecl)
+                calculateUnionLayout(cast(UnionDecl)node);
 
         foreach (node; ast.body) {
             if (node.kind == NodeKind.FuncDecl)
@@ -32,19 +34,81 @@ class AstLowerer {
             else if (node.kind == NodeKind.StructDecl) {
                 StructDecl sd = cast(StructDecl) node;
                 hir.globals ~= lowerStructDecl(sd);
-                foreach (method; sd.methods) {
-                    // Mangle: Muda o nome de "print" para "User_print"
-                    string originalName = method.funcDecl.name;
-                    method.funcDecl.name = sd.name ~ "_" ~ originalName;
-                    hir.globals ~= lowerFunc(method.funcDecl);
-                    method.funcDecl.name = originalName;
-                }
-            }
+                foreach (methodName, overloads; sd.methods)
+                    foreach (method; overloads) 
+                    {
+                        // Mangle: Muda o nome de "print" para "User_print"
+                        string originalName = method.funcDecl.name;
+                        method.funcDecl.name = method.funcDecl.mangledName;
+                        hir.globals ~= lowerFunc(method.funcDecl);
+                        // method.funcDecl.name = originalName;
+                    }
+            } else if (node.kind == NodeKind.UnionDecl)
+                hir.globals ~= lowerUnionDecl(cast(UnionDecl) node);
+            else if (node.kind == NodeKind.EnumDecl)
+                hir.globals ~= lowerEnumDecl(cast(EnumDecl) node);
         }
         return hir;
     }
 
 private:
+
+    HirNode lowerUnionDecl(UnionDecl ast)
+    {
+        auto decl = new HirUnionDecl();
+        decl.name = ast.mangledName;
+        decl.type = ast.resolvedType; 
+
+        foreach (field; ast.fields)
+        {
+            decl.fieldNames ~= field.name;
+            decl.fieldTypes ~= field.resolvedType;
+            string key = ast.name ~ "." ~ field.name;
+            decl.fieldOffsets ~= structOffsets.get(key, 0);
+        }
+
+        decl.totalSize = structSizes.get(ast.mangledName, 0);
+        return decl;
+    }
+
+    HirNode lowerEnumDecl(EnumDecl ast)
+    {
+        // Enum no backend é só inteiro, mas podemos guardar metadados se quiser
+        auto decl = new HirEnumDecl();
+        decl.name = ast.name;
+        decl.type = ast.resolvedType; 
+        // Campos/Membros do enum
+        return decl;
+    }
+
+    void calculateUnionLayout(UnionDecl ast)
+    {
+        int maxSize = 0;
+        int unionMaxAlign = 1;
+
+        foreach (field; ast.fields) {
+            int fieldAlign = getTypeAlignment(field.resolvedType);
+            int fieldSize = cast(int) calculateTypeSize(field.resolvedType);
+
+            if (fieldAlign > unionMaxAlign) unionMaxAlign = fieldAlign;
+            if (fieldSize > maxSize) maxSize = fieldSize;
+
+            // Offset é sempre 0
+            string key = ast.mangledName ~ "." ~ field.name;
+            structOffsets[key] = 0; 
+        }
+
+        // Padding final para alinhamento
+        if (maxSize % unionMaxAlign != 0) {
+            int padding = unionMaxAlign - (maxSize % unionMaxAlign);
+            maxSize += padding;
+        }
+        
+        if (maxSize == 0) maxSize = 1;
+
+        structSizes[ast.mangledName] = maxSize;
+        structAlignments[ast.mangledName] = unionMaxAlign;
+    }
 
     void calculateStructLayout(StructDecl ast)
     {
@@ -71,7 +135,7 @@ private:
             }
             
             // Armazena o offset deste campo
-            string key = ast.name ~ "." ~ field.name;
+            string key = ast.mangledName ~ "." ~ field.name;
             structOffsets[key] = currentOffset;
             
             // Avança o offset
@@ -87,8 +151,8 @@ private:
         // Caso de struct vazia (em C é proibido ter tamanho 0, geralmente vira 1)
         if (currentOffset == 0) currentOffset = 1;
         
-        structSizes[ast.name] = currentOffset;
-        structAlignments[ast.name] = structMaxAlign; // Salva para uso futuro
+        structSizes[ast.mangledName] = currentOffset;
+        structAlignments[ast.mangledName] = structMaxAlign; // Salva para uso futuro
     }
     
     int getTypeAlignment(Type t)
@@ -123,6 +187,16 @@ private:
             // Fallback se ainda não calculou (cuidado com ordem de declaração)
             return 1; 
         }
+
+        if (UnionType ut = cast(UnionType) t) 
+        {
+            int maxA = 1;
+            foreach(StructField field; ut.fields) {
+                int a = getTypeAlignment(field.resolvedType);
+                if (a > maxA) maxA = a;
+            }
+            return maxA;
+        }
         
         return 1;
     }
@@ -130,7 +204,7 @@ private:
     HirNode lowerStructDecl(StructDecl ast)
     {
         auto decl = new HirStructDecl();
-        decl.name = ast.name;
+        decl.name = ast.mangledName;
         
         StructType structType = cast(StructType) ast.resolvedType;
         if (structType is null) return decl;
@@ -141,7 +215,7 @@ private:
             decl.fieldNames ~= field.name;
             decl.fieldTypes ~= field.resolvedType;
             
-            string key = ast.name ~ "." ~ field.name;
+            string key = ast.mangledName ~ "." ~ field.name;
             decl.fieldOffsets ~= structOffsets.get(key, 0);
         }
         
@@ -154,7 +228,7 @@ private:
     HirNode lowerStructLit(StructLit ast)
     {
         auto lit = new HirStructLit();
-        lit.structName = ast.structName;
+        lit.structName = ast.mangledName;
         lit.type = ast.resolvedType;
         lit.isConstructorCall = ast.isConstructorCall;
         
@@ -241,7 +315,7 @@ private:
             targetType = ptrType.pointeeType;
         
         if (auto structType = cast(StructType) targetType) {
-            string key = structType.name ~ "." ~ ast.member;
+            string key = structType.mangledName ~ "." ~ ast.member;
             mem.memberOffset = structOffsets.get(key, 0);
         } else
             mem.memberOffset = 0;
@@ -257,7 +331,7 @@ private:
     HirFunction lowerFunc(FuncDecl ast)
     {
         auto func = new HirFunction();
-        func.name = ast.name;
+        func.name = ast.mangledName;
         func.returnType = ast.resolvedType;
         
         foreach(arg; ast.args)
@@ -300,6 +374,7 @@ private:
             case NodeKind.BlockStmt:    return lowerBlock(cast(BlockStmt) node);
             case NodeKind.VersionStmt:  return lowerVersion(cast(VersionStmt) node);
             case NodeKind.BrkOrCntStmt: return lowerBrkC(cast(BrkOrCntStmt) node);
+            case NodeKind.CastExpr:     return lowerCast(cast(CastExpr) node);
             
             case NodeKind.CallExpr: 
                 auto wrapper = new HirCallStmt();
@@ -309,10 +384,18 @@ private:
             case NodeKind.UnaryExpr:
                 return lowerExpr(node);
 
+            case NodeKind.DeferStmt:
+                return lowerDefer(cast(DeferStmt) node);
+
             default:
                 writeln("Stmt nao implementado no HIR Lowering: ", node.kind);
                 return null;
         }
+    }
+
+    HirNode lowerDefer(DeferStmt ast)
+    {
+        return new HirDefer(lowerStmt(ast.stmt));
     }
 
     HirNode lowerBrkC(BrkOrCntStmt node)
@@ -391,11 +474,11 @@ private:
 
     HirNode lowerAssign(AssignDecl ast)
     {
-        auto store = new HirStore();
-        store.type = ast.resolvedType;
-        store.ptr = lowerLValue(ast.left);
-        store.value = lowerExpr(ast.right);
-        return store;
+        HirAssignDecl assign = new HirAssignDecl;
+        assign.op = ast.op;
+        assign.target = lowerLValue(ast.left);
+        assign.value = lowerExpr(ast.right);
+        return assign;
     }
 
     HirNode lowerLValue(Node node)
@@ -420,7 +503,8 @@ private:
             break;
             
             case NodeKind.IndexExpr: 
-                return lowerIndex(cast(IndexExpr) node);
+                auto lvalue = lowerIndex(cast(IndexExpr) node);
+                return lvalue;
 
             case NodeKind.MemberExpr:
                 return lowerMember(cast(MemberExpr) node);
@@ -436,7 +520,7 @@ private:
 
         switch (node.kind)
         {
-            case NodeKind.IntLit: 
+            case NodeKind.IntLit:
                 return new HirIntLit((cast(IntLit)node).value.get!int, node.resolvedType);
             case NodeKind.LongLit:
                 return new HirIntLit((cast(LongLit)node).value.get!long, node.resolvedType);
@@ -449,7 +533,7 @@ private:
             case NodeKind.CharLit:
                 return new HirCharLit((cast(CharLit)node).value.get!char, node.resolvedType);
             case NodeKind.StringLit:
-                return new HirStringLit((cast(StringLit)node).value.get!string, node.resolvedType);
+                return new HirStringLit((cast(StringLit)node).value.get!string, new PrimitiveType(BaseType.String));
             case NodeKind.NullLit:
                 return new HirNullLit(node.resolvedType);
             case NodeKind.ArrayLit:
@@ -485,6 +569,39 @@ private:
 
     HirNode lowerBinary(BinaryExpr ast)
     {
+        if (ast.mangledName !is null)
+        {
+            auto call = new HirCallExpr();
+            call.funcName = ast.mangledName; 
+            call.type = ast.resolvedType;
+
+            auto selfExpr = ast.isRight ? ast.right : ast.left;
+            auto valExpr  = ast.isRight ? ast.left  : ast.right;
+
+            call.args ~= lowerLValue(selfExpr); 
+            if (ast.usesOpBinary)
+                call.args ~= new HirStringLit(ast.op, new PointerType(new PrimitiveType(BaseType.Char)));
+            
+            call.args ~= lowerExpr(valExpr);
+            return call;
+        }
+
+        if (ast.left.kind == NodeKind.AssignDecl)
+        {
+            auto assign = lowerAssign(cast(AssignDecl) ast.left);
+            
+            auto assignExpr = new HirAssignExpr();
+            assignExpr.assign = cast(HirAssignDecl) assign;
+            assignExpr.type = ast.left.resolvedType;
+            
+            auto bin = new HirBinary();
+            bin.op = ast.op;
+            bin.left = assignExpr;  // Retorna o valor atribuído
+            bin.right = lowerExpr(ast.right);
+            bin.type = ast.resolvedType;
+            return bin;
+        }
+
         auto bin = new HirBinary();
         bin.op = ast.op;
         bin.left = lowerExpr(ast.left);
@@ -569,8 +686,9 @@ private:
             else if (auto pt = cast(PointerType) targetType) structName = (cast(StructType)pt.pointeeType).name;
             
             // Nome final: Struct_Metodo
-            call.funcName = structName ~ "_" ~ mem.member;
-
+            // structName ~ "_" ~ mem.member
+            call.funcName = ast.mangledName;
+            
             // O primeiro argumento vira o próprio objeto 'u'    
             // Se o método espera ponteiro (User*) e temos valor (User), pegamos endereço
             // Se o método espera ponteiro (User*) e temos ponteiro (User*), passamos direto
@@ -585,7 +703,7 @@ private:
             call.args ~= thisArg;
         } 
         else if (auto id = cast(Identifier) ast.id)
-            call.funcName = id.value.get!string;
+            call.funcName = ast.mangledName;
         else if (auto str = cast(StringLit) ast.id)
             call.funcName = str.value.get!string;
         
@@ -634,11 +752,17 @@ private:
         
         if (auto st = cast(StructType) t)
         {
-            // Verifica se já calculamos o tamanho dessa struct
-            if (st.name in structSizes)
-                return structSizes[st.name];
-            // Se não achou (bizarro), retorna pelo menos um tamanho seguro ou erro
+            if (st.mangledName in structSizes)
+                return structSizes[st.mangledName];
             writeln("Warning: Size of struct ", st.name, " not found, assuming 0.");
+            return 0;
+        }
+
+        if (auto st = cast(UnionType) t)
+        {
+            if (st.mangledName in structSizes)
+                return structSizes[st.mangledName];
+            writeln("Warning: Size of union ", st.name, " not found, assuming 0.");
             return 0;
         }
 

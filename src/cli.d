@@ -10,4 +10,5 @@ struct CompilerConfig
     bool dumpHir = false;
     bool verbose = false;
     string targetTriple = "";
+    string compilerArg = "";
 }

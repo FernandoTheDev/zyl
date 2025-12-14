@@ -1,0 +1,23 @@
+// TODO
+T sum!T(T x, T y) {
+    return x + y
+}
+
+U cast!(T, U)(T value) {
+    return (U) value
+}
+
+void swap!T(T* a, T* b) {
+    T temp = *a
+    *a = *b
+    *b = temp
+}
+
+int main() {
+    int x = sum!int(100, 200)
+    int a = 88
+    swap!int(&x, &a)
+    float z = sum!float(3F, 0.141592F)    
+    double y = cast!(int, double)(10) // 10D
+    return 0
+}

@@ -1,0 +1,47 @@
+import std.libc.mem : { malloc, memcpy, free }
+import std.libc.string : { strlen }
+import std.libc.io : { printf, exit }
+
+struct String {
+    string str = ""
+    bool owns_memory = false
+
+    void concat(String* self, string str2) {
+        int l1 = strlen(self.str)
+        int l2 = strlen(str2)
+        
+        string out = (string) malloc(l1 + l2 + 1)
+        
+        if out == null
+            self.error("Allocation failed in String.concat") 
+
+        memcpy(out, self.str, l1)
+        memcpy(out + l1, str2, l2 + 1) // Copia str2 + \0
+
+        if self.owns_memory
+            free(self.str)
+
+        self.str = out
+        self.owns_memory = true
+    }
+
+    void destroy(String* self) {
+        if self.owns_memory {
+            free(self.str)
+            self.str = ""
+            self.owns_memory = false
+        }
+    }
+
+    void opAddAssign(String* self, string left) {
+        self.concat(left)
+    }
+
+    void opBinary(String* self, string op, string left) {}
+
+    void error(String* self, string msg) {
+        printf("Error: %s\n", msg)
+        exit(1)
+    }
+}
+

@@ -24,7 +24,8 @@ private void dumpInstr(MirInstr instr) {
     write("    "); // Indentação da instrução
 
     // Se a instrução gera resultado (tem destino), imprime "%n = "
-    if (instr.dest.type !is null && instr.op != MirOp.Store && instr.op != MirOp.Br && instr.op != MirOp.CondBr && instr.op != MirOp.Ret) {
+    if (instr.dest.type !is null && instr.op != MirOp.Store && instr.op != MirOp.Br && instr.op != MirOp.CondBr && 
+        instr.op != MirOp.Ret) {
         writef("%s = ", formatVal(instr.dest));
     }
 

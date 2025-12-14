@@ -43,9 +43,6 @@ private:
         if (auto ptr = cast(PointerTypeExpr) typeExpr)
             return resolvePointer(ptr);
 
-        if (auto uniont = cast(UnionTypeExpr) typeExpr)
-            return resolveUnion(uniont);
-
         if (auto fn = cast(FunctionTypeExpr) typeExpr)
             return resolveFuncType(fn);
 
@@ -94,11 +91,5 @@ private:
         }
 
         return new PointerType(pointeeType);
-    }
-
-    Type resolveUnion(UnionTypeExpr uniont)
-    {
-        Type[] types = uniont.types.map!(t => resolve(t)).array;
-        return new UnionType(types);
     }
 }

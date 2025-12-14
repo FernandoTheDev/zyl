@@ -8,6 +8,7 @@ import std.process : executeShell, escapeShellCommand;
 import std.stdio : writeln, writefln, stderr;
 import std.file : exists, remove;
 import std.format : format;
+import std.array : split;
 
 enum BackendType 
 {
@@ -50,6 +51,12 @@ class BackendBuilder
             "-lm",                           // Linka com Math Library (libc)
             "-Wno-override-module"           // Silencia warning comum de IR gerado manualmente
         ];
+
+        if (config.compilerArg != "")
+            cmdArgs ~= config.compilerArg.split();
+
+        // writeln(cmdArgs);
+        // return;
 
         // Se quiser debug info no futuro:
         // if (config.optLevel == 0) cmdArgs ~= "-g";

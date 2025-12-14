@@ -1,11 +1,11 @@
-int printf  (string msg, ...);
+int printf  (char* msg, ...);
 
-long strlen(string str) {
+long strlen(char* str) {
     for long i = 0L ; str[i] != '\0' ; i++ {}
     return i
 }
 
-int strcmp(string a, string b) {
+int strcmp(char* a, char* b) {
     for long i = 0L ;; i++ {
         int ca = a[i]
         int cb = b[i]
@@ -21,7 +21,7 @@ int strcmp(string a, string b) {
 
 
 int main() {
-    string name = "Fernando"
+    char* name = "Fernando"
     char ch = name[0]
     printf("%c\n", ch)
 

@@ -58,6 +58,10 @@ int main() {
     q.items = (int*) malloc(q.size * sizeof int)
     q.head = 0
     q.tail = 0
+    
+    defer free(q.items)
+    defer free(q)
+
     pthread_mutex_init(&(q.mutex), null)
     pthread_cond_init(&(q.not_empty), null)
     pthread_cond_init(&(q.not_full), null)
@@ -69,9 +73,6 @@ int main() {
     
     pthread_join(prod_tid, null)
     pthread_join(cons_tid, null)
-    
-    free(q.items)
-    free(q)
     
     return 0
 }

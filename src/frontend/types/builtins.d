@@ -10,14 +10,14 @@ class BuiltinTypes
     static PrimitiveType _Float; // f32
     static PrimitiveType _Double; // f64
     static PrimitiveType _Bool; // i1
-    static PrimitiveType _String; // string
+    static PointerType _String; // string
     static PrimitiveType _Char; // char
     static PrimitiveType _Void; // void
     static PrimitiveType _Any; // any
 
     static PrimitiveType _Null;
     static PrimitiveType _Never;
-    static PrimitiveType[string] aliases;
+    static Type[string] aliases;
 
     static void initialize()
     {
@@ -26,7 +26,7 @@ class BuiltinTypes
         _Float = new PrimitiveType(BaseType.Float);
         _Double = new PrimitiveType(BaseType.Double);
         _Bool = new PrimitiveType(BaseType.Bool);
-        _String = new PrimitiveType(BaseType.String);
+        _String = new PointerType(new PrimitiveType(BaseType.Char));
         _Char = new PrimitiveType(BaseType.Char);
         _Void = new PrimitiveType(BaseType.Void);
         _Null = new PrimitiveType(BaseType.Void);
@@ -57,7 +57,7 @@ class BuiltinTypes
         return (name in aliases) !is null;
     }
 
-    static PrimitiveType getPrimitive(string name)
+    static Type getPrimitive(string name)
     {
         if (auto type = name in aliases)
             return *type;

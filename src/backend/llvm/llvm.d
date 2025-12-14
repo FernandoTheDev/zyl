@@ -310,3 +310,4 @@ LLVMValueRef LLVMConstArray2(LLVMTypeRef ElementType,
                              LLVMValueRef *ConstantVals,
                              size_t Length);
 void LLVMSetValueName2(LLVMValueRef Val, const char *Name, size_t NameLen);
+ulong LLVMStoreSizeOfType(LLVMTargetDataRef td, LLVMTypeRef ty);

@@ -1,0 +1,31 @@
+import std.libc.mem : { malloc, free }
+
+struct Arena {
+    char* base = null
+    int size = 0
+    int offset = 0
+
+    void create(Arena* self, int size) {
+        self.base = malloc(size)
+        self.size = size
+    }
+
+    void* alloc(Arena* self, int amount) {
+        if self.offset + amount > self.size
+            return null
+        void* ptr = self.base + self.offset
+        self.offset = self.offset + amount
+        return ptr
+    }
+
+    void reset(Arena* self) {
+        self.offset = 0
+    }
+
+    void destroy(Arena* self) {
+        free(self.base)
+        self.base = null
+        self.offset = 0
+        self.size = 0
+    }
+}

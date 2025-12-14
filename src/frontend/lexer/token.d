@@ -1,6 +1,6 @@
 module frontend.lexer.token;
 
-import std.variant, std.stdio, std.conv;
+import std.variant, std.stdio, std.conv, std.format;
 
 enum TokenKind
 {
@@ -16,6 +16,10 @@ enum TokenKind
     Break,
     Continue,
     Version,
+    Union,
+    Enum,
+    Defer,
+    NoMangle,
 
     True,
     False,
@@ -113,4 +117,9 @@ struct Loc
     string dir;
     LocLine start;
     LocLine end;
+    
+    string toStr()
+    {
+        return format("%s/%s:%d:%d:%d", dir, filename, start.line, start.offset, end.offset);
+    }
 }

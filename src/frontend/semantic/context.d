@@ -1,7 +1,7 @@
 module frontend.semantic.context;
 
 import frontend;
-import std.format : format;
+import common.reporter, std.format : format;
 import std.stdio : writeln, writefln;
 import std.array : replicate;
 
@@ -10,6 +10,8 @@ enum SymbolKind
     Variable,
     Function,
     Struct,
+    Enum,
+    Union
 }
 
 abstract class Symbol
@@ -125,23 +127,83 @@ class StructSymbol : Symbol
     }
 }
 
+class EnumSymbol : Symbol
+{
+    EnumDecl declaration;
+    EnumType enumType;
+
+    this(string name, EnumType enumType, EnumDecl declaration, Loc loc)
+    {
+        super(name, SymbolKind.Enum, enumType, loc);
+        this.enumType = enumType;
+        this.declaration = declaration;
+    }
+
+    override Symbol clone()
+    {
+        auto cloned = new EnumSymbol(name, enumType, declaration, loc);
+        cloned.isPublic = this.isPublic;
+        cloned.isExternal = true;
+        return cloned;
+    }
+
+    bool hasMember(string fieldName)
+    {
+        return enumType.hasMember(fieldName);
+    }
+}
+
+class UnionSymbol : Symbol
+{
+    UnionDecl declaration;
+    UnionType unionType;
+
+    this(string name, UnionType unionType, UnionDecl declaration, Loc loc)
+    {
+        super(name, SymbolKind.Union, unionType, loc);
+        this.unionType = unionType;
+        this.declaration = declaration;
+    }
+
+    override Symbol clone()
+    {
+        auto cloned = new UnionSymbol(name, unionType, declaration, loc);
+        cloned.isPublic = this.isPublic;
+        cloned.isExternal = true;
+        return cloned;
+    }
+
+    bool hasField(string fieldName)
+    {
+        return unionType.hasField(fieldName);
+    }
+
+    Type getFieldType(string fieldName)
+    {
+        return unionType.getFieldType(fieldName);
+    }
+}
+
 class Scope
 {
     Scope parent;
     Symbol[string] symbols;
     Scope[string] namespaces;
     string name;
+    FunctionSymbol[][string] functionOverloads;
+    DiagnosticError error;
 
-    this(Scope parent, string name = "")
+    this(Scope parent, DiagnosticError error, string name = "")
     {
         this.parent = parent;
+        this.error = error;
         this.name = name;
     }
 
     bool addToNamespace(string namespaceName, Symbol symbol)
     {
         if (namespaceName !in namespaces)
-            namespaces[namespaceName] = new Scope(null, namespaceName);
+            namespaces[namespaceName] = new Scope(null, error, namespaceName);
         
         return namespaces[namespaceName].define(symbol);
     }
@@ -211,6 +273,77 @@ class Scope
             result ~= sym;
         return result;
     }
+
+    FunctionSymbol[] resolveFunctions(string name)
+    {
+        FunctionSymbol[] candidates;
+        
+        // Pega as locais
+        if (name in functionOverloads)
+            candidates ~= functionOverloads[name];
+        
+        // Pega as do pai (shadowing ou merge? Normalmente merge em overloads)
+        if (parent)
+            candidates ~= parent.resolveFunctions(name);
+            
+        return candidates;
+    }
+
+    bool defineFunction(FunctionSymbol newSym)
+    {
+        if (newSym.name in functionOverloads)
+        {
+            auto existingOverloads = functionOverloads[newSym.name];
+
+            foreach (FunctionSymbol existing; existingOverloads)
+            {
+                if (isSameSignature(newSym, existing))
+                {
+                    reportError("Ambiguous redeclaration of the function '" ~ newSym.name ~ "'. " ~
+                        "A function with the same argument types has already been defined in:" ~ 
+                        existing.loc.toStr(), newSym.loc);
+                    return false; 
+                }
+                
+                // Validação extern(C) / noMangle
+                // Se sua AST usa isExternC ou noMangle, ajuste aqui
+                if (newSym.declaration.noMangle && existing.declaration.noMangle)
+                {
+                    reportError("Conflict: Multiple '@nomangle' functions with the name '" ~ newSym.name ~ 
+                        "' are not allowed.", newSym.loc);
+                    return false;
+                }
+            }
+
+            functionOverloads[newSym.name] ~= newSym;
+        }
+        else
+        {
+            functionOverloads[newSym.name] = [newSym];
+            // Também adiciona no mapa genérico para lookups simples (pega o primeiro)
+            symbols[newSym.name] = newSym; 
+        }
+        return true;
+    }
+
+    // Compara assinaturas usando os tipos armazenados no SÍMBOLO
+    private bool isSameSignature(FunctionSymbol a, FunctionSymbol b)
+    {
+        if (a.paramTypes.length != b.paramTypes.length) return false;
+
+        foreach (i, typeA; a.paramTypes)
+        {
+            Type typeB = b.paramTypes[i];
+            if (typeA.toStr() != typeB.toStr()) return false;
+        }
+
+        return true;
+    }
+
+    private void reportError(string msg, Loc loc)
+    {
+        error.addError(Diagnostic(msg, loc));    
+    }
 }
 
 class Context
@@ -220,10 +353,12 @@ class Context
     FunctionSymbol currentFunction;
     StructSymbol currentStruct;
     int loopDepth;
+    DiagnosticError error;
 
-    this()
+    this(DiagnosticError error)
     {
-        this.globalScope = new Scope(null, "global");
+        this.error = error;
+        this.globalScope = new Scope(null, error, "global");
         this.currentScope = globalScope;
         this.currentFunction = null;
         this.currentStruct = null;
@@ -232,7 +367,7 @@ class Context
 
     void enterScope(string name = "")
     {
-        currentScope = new Scope(currentScope, name);
+        currentScope = new Scope(currentScope, error, name);
     }
 
     void exitScope()
@@ -307,12 +442,22 @@ class Context
 
     bool addFunction(FunctionSymbol func)
     {
-        return globalScope.define(func);
+        return globalScope.defineFunction(func);
     }
 
     bool addStruct(StructSymbol structSym)
     {
         return globalScope.define(structSym);
+    }
+
+    bool addEnum(EnumSymbol sym)
+    {
+        return globalScope.define(sym);
+    }
+
+    bool addUnion(UnionSymbol sym)
+    {
+        return globalScope.define(sym);
     }
 
     // Importa um símbolo de outro contexto
@@ -364,6 +509,18 @@ class Context
         return cast(StructSymbol) sym;
     }
 
+    UnionSymbol lookupUnion(string name)
+    {
+        Symbol sym = globalScope.lookup(name);
+        return cast(UnionSymbol) sym;
+    }
+
+    EnumSymbol lookupEnum(string name)
+    {
+        Symbol sym = globalScope.lookup(name);
+        return cast(EnumSymbol) sym;
+    }
+
     bool canAssign(string varName)
     {
         VarSymbol var = lookupVariable(varName);
@@ -377,10 +534,88 @@ class Context
         return currentScope.isDefined(name);
     }
 
-    // Retorna todos os símbolos públicos do escopo global
     Symbol[] getPublicSymbols()
     {
         return globalScope.getPublicSymbols();
+    }
+
+    FunctionSymbol findFunction(string name, Type[] argTypes, Type returnType = null)
+    {
+        auto candidates = currentScope.resolveFunctions(name);
+
+        if (candidates.length == 0) return null;
+
+        FunctionSymbol bestMatch = null;
+        int bestScore = 999_999; 
+
+        foreach (FunctionSymbol cand; candidates)
+        {
+            // Verifica se a função tem parâmetros variádicos
+            bool hasVariadic = false;
+            size_t minParams = cand.paramTypes.length;
+
+            foreach (i, param; cand.paramTypes)
+            {
+                if (param is null) {
+                    hasVariadic = true;
+                    minParams = i; // Parâmetros obrigatórios antes do variádico
+                    break;
+                }
+            }
+
+            // Validação de número de argumentos
+            if (hasVariadic) {
+                // Com variádico: precisa ter pelo menos os argumentos obrigatórios
+                if (argTypes.length < minParams) continue;
+            }
+            else {
+                // Sem variádico: número exato
+                if (cand.paramTypes.length != argTypes.length) continue;
+            }
+            
+            // Verifica tipo de retorno se especificado
+            if (returnType !is null && cand.returnType !is null)
+                if (!cand.returnType.isCompatibleWith(returnType)) continue;
+
+            int currentScore = 0;
+            bool compatible = true;
+
+            // Valida apenas os argumentos até o variádico (ou todos se não for variádico)
+            size_t argsToCheck = hasVariadic ? minParams : cand.paramTypes.length;
+
+            foreach (i; 0 .. argsToCheck)
+            {
+                Type expected = cand.paramTypes[i];
+                Type received = argTypes[i];
+
+                if (received is null || expected is null) 
+                {
+                    compatible = false;
+                    break;
+                }
+
+                if (expected.toStr() == received.toStr())
+                    currentScore += 0; // Match exato
+                else if (expected.isCompatibleWith(received))
+                    currentScore += 1; // Match com conversão implícita
+                else
+                {
+                    compatible = false;
+                    break;
+                }
+            }
+
+            // Se for variádico, os argumentos extras são sempre compatíveis
+            // (não precisamos checar, qualquer tipo é aceito)
+
+            if (compatible)
+                if (currentScore < bestScore) {
+                    bestScore = currentScore;
+                    bestMatch = cand;
+                }
+        }
+
+        return bestMatch;
     }
 
     void dump()
@@ -424,15 +659,15 @@ class Context
                                 field.resolvedType !is null ? field.resolvedType.toStr() : "unresolved");
                     }
                 }
-                if (structSym.structType.methods.length > 0)
-                {
-                    writefln("%s    Methods:", prefix);
-                    foreach (method; structSym.structType.methods)
-                    {
-                        string methodType = method.isConstructor ? "constructor" : "method";
-                        writefln("%s      - %s (%s)", prefix, method.funcDecl.name, methodType);
-                    }
-                }
+                // if (structSym.structType.methods.length > 0)
+                // {
+                //     writefln("%s    Methods:", prefix);
+                //     foreach (method; structSym.structType.methods)
+                //     {
+                //         string methodType = method.isConstructor ? "constructor" : "method";
+                //         writefln("%s      - %s (%s)", prefix, method.funcDecl.name, methodType);
+                //     }
+                // }
             }
         }
 

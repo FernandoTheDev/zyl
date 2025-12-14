@@ -1,0 +1,10 @@
+import std.libc.io : { printf }
+
+int main() {
+    int i = 100
+    printf("i = %d\n", i)     // 100
+    printf("i++ = %d\n", i++) // 100 -> 101
+    printf("i-- = %d\n", i--) // 101 -> 100
+    printf("i = %d\n", i)     // 100
+    return 0;
+}

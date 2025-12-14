@@ -96,41 +96,6 @@ mixin template CodeGenInstr() {
                     LLVMBuildRetVoid(builder);
                 break;
 
-            // case MirOp.Call:
-            //     string funcName = instr.operands[0].constStr;
-                
-            //     if (funcName !in funcMap) 
-            //     {
-            //         writeln("Erro: Função não encontrada: ", funcName);
-            //         break;
-            //     }
-
-            //     LLVMValueRef func = funcMap[funcName];
-            //     LLVMTypeRef funcTy = funcTypeMap[funcName];
-
-            //     LLVMTypeRef returnType = LLVMGetReturnType(funcTy);
-            //     LLVMTypeKind returnKind = LLVMGetTypeKind(returnType);
-            //     bool isVoid = (returnKind == LLVMTypeKind.LLVMVoidTypeKind);
-
-            //     LLVMValueRef[] args;
-            //     foreach(op; instr.operands[1..$])
-            //         args ~= getLLVMValue(op);
-
-            //     const(char)* name = isVoid ? "" : "callres";
-
-            //     LLVMValueRef res = LLVMBuildCall2(
-            //         builder, 
-            //         funcTy, 
-            //         func, 
-            //         args.ptr, 
-            //         cast(uint)args.length, 
-            //         name 
-            //     );
-
-            //     if (!isVoid)
-            //         setReg(instr.dest, res);
-            //     break;
-
             case MirOp.Call:
                 // O operando 0 é o CALLEE (quem será chamado)
                 MirValue calleeVal = instr.operands[0];
@@ -139,7 +104,7 @@ mixin template CodeGenInstr() {
                 LLVMTypeRef funcSig;
 
                 string name = calleeVal.constStr;
-
+                
                 if (name in funcMap) 
                 {
                     // Chamada direta - função declarada no módulo
@@ -163,11 +128,9 @@ mixin template CodeGenInstr() {
                             "func_ptr_load");
                     }
                     else
-                    {
                         // Já é o ponteiro direto
                         funcPtr = ptrVal;
-                    }
-
+                    
                     // Extrair a assinatura do tipo
                     if (auto fnType = cast(FunctionType) calleeVal.type) 
                     {
@@ -175,6 +138,9 @@ mixin template CodeGenInstr() {
                     }
                     else 
                     {
+                        writeln("NAME: ", name);
+                        writeln("TYPE: ", calleeVal.type.toStr());
+                        writeln(calleeVal.elements);
                         writeln("Erro Backend: Chamada por referência sem FunctionType.");
                         writeln("Tipo encontrado: ", calleeVal.type);
                         break;
@@ -252,6 +218,18 @@ mixin template CodeGenInstr() {
                 LLVMValueRef val = getLLVMValue(instr.operands[0]);
                 LLVMTypeRef targetTy = toLLVMType(instr.dest.type);
                 setReg(instr.dest, LLVMBuildBitCast(builder, val, targetTy, "cast"));
+                break;
+
+            case MirOp.IntToPtr:
+                LLVMValueRef val = getLLVMValue(instr.operands[0]);
+                LLVMTypeRef targetTy = toLLVMType(instr.dest.type);
+                setReg(instr.dest, LLVMBuildIntToPtr(builder, val, targetTy, "inttptr"));
+                break;
+
+            case MirOp.PtrToInt:
+                LLVMValueRef val = getLLVMValue(instr.operands[0]);
+                LLVMTypeRef targetTy = toLLVMType(instr.dest.type);
+                setReg(instr.dest, LLVMBuildPtrToInt(builder, val, targetTy, "ptrtint"));
                 break;
 
             case MirOp.SIToFP:
@@ -338,6 +316,12 @@ mixin template CodeGenInstr() {
             case MirOp.FRem:
                 auto res = LLVMBuildFRem(builder, getLLVMValue(instr.operands[0]), getLLVMValue(instr.operands[1]), 
                     "frem");
+                setReg(instr.dest, res);
+                break;
+
+            case MirOp.BXor:
+                auto res = LLVMBuildXor(builder, getLLVMValue(instr.operands[0]), getLLVMValue(instr.operands[1]), 
+                    "xor");
                 setReg(instr.dest, res);
                 break;
 

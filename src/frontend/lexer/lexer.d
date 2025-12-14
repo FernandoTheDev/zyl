@@ -48,7 +48,9 @@ private:
             isIdentCont[c] = true;
         }
         isIdentStart['_'] = true;
+        isIdentStart['@'] = true;
         isIdentCont['_'] = true;
+        isIdentCont['@'] = true;
         foreach (c; '0' .. '9' + 1)
             isIdentCont[c] = true;
     }
@@ -68,6 +70,10 @@ private:
         keywords["break"] = TokenKind.Break;
         keywords["continue"] = TokenKind.Continue;
         keywords["version"] = TokenKind.Version;
+        keywords["union"] = TokenKind.Union;
+        keywords["enum"] = TokenKind.Enum;
+        keywords["defer"] = TokenKind.Defer;
+        keywords["@nomangle"] = TokenKind.NoMangle;
 
         keywords["true"] = TokenKind.True;
         keywords["false"] = TokenKind.False;
@@ -222,7 +228,7 @@ private:
         long startOffset = offset;
         long startCol = column;
 
-        while (offset < source.length && (isIdentCont[peek()] || peek() == '_'))
+        while (offset < source.length && (isIdentCont[peek()] || peek() == '_' || peek() == '@'))
             advance();
 
         string id = source[startOffset .. offset];
@@ -279,7 +285,7 @@ private:
                 return;
             }
 
-            tokens ~= Token(TokenKind.I32, Variant(intern(to!string(parse!long(hexOnly, 16)))),
+            tokens ~= Token(TokenKind.I64, Variant(intern(to!string(parse!long(hexOnly, 16)))),
                 createLoc(startCol - 1, column - 2));
             return;
         }

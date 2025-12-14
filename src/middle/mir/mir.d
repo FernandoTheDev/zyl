@@ -9,7 +9,7 @@ enum MirOp
     
     // Aritmética
     Add, Sub, Mul, Div, Shl, Shr,
-    FAdd, FSub, FMul, FDiv, FNeg, Neg, Xor, FRem, SRem,
+    FAdd, FSub, FMul, FDiv, FNeg, Neg, Xor, FRem, SRem, BXor, BOr, BNot,
     
     And, Or,
 
@@ -23,6 +23,8 @@ enum MirOp
     Br, CondBr, Call, Ret,
     
     // Casts
+    IntToPtr, // Inteiro -> Ponteiro (0xB8000 -> char*)
+    PtrToInt, // Ponteiro -> Inteiro (char* -> long)
     BitCast, SIToFP, FPToSI, FPExt, SExt, Trunc, FPTrunc, ZExt
 }
 

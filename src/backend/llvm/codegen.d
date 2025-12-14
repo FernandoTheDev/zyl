@@ -22,6 +22,7 @@ class LLVMBackend
     LLVMValueRef[] vregMap;
     LLVMBasicBlockRef[string] blockMap; // Mapa de Label -> LLVM Block
     LLVMTypeRef[string] structTypes;
+    LLVMTypeRef[string] unionTypes;
     LLVMValueRef[string] funcMap;
     LLVMTypeRef[string] funcTypeMap;
     LLVMValueRef[string] valueMap;
@@ -57,11 +58,12 @@ class LLVMBackend
 
     void generate(MirProgram prog, HirProgram hir)
     {
-        foreach(g; hir.globals) {
-            if (auto s = cast(HirStructDecl)g)
+        foreach(g; hir.globals)
+            if (HirStructDecl s = cast(HirStructDecl)g)
                 structTypes[s.name] = LLVMStructCreateNamed(context, toStringz(s.name));
-        }
-
+            else if (HirUnionDecl s = cast(HirUnionDecl)g)
+                unionTypes[s.name] = LLVMStructCreateNamed(context, toStringz(s.name));
+        
         foreach(g; prog.globals)
         {
             LLVMTypeRef type = toLLVMType(g.type);
@@ -93,6 +95,40 @@ class LLVMBackend
                 LLVMTypeRef[] fields;
                 foreach(ft; s.fieldTypes) fields ~= toLLVMType(ft);
                 LLVMStructSetBody(structTypes[s.name], fields.ptr, cast(uint)fields.length, 0);
+            } 
+            else if (auto u = cast(HirUnionDecl)g)
+            {
+                // Estratégia para Union no LLVM:
+                // Criamos uma struct com UM ÚNICO campo, que é o maior membro da union.
+                // Isso garante o tamanho correto de alocação.
+                
+                LLVMTypeRef largestMemberType = null;
+                ulong maxSize = 0;
+
+                foreach(ft; u.fieldTypes)
+                {
+                    LLVMTypeRef lType = toLLVMType(ft);
+                    
+                    // Se temos TargetData, calculamos o tamanho real
+                    ulong size = 0;
+                    if (targetData !is null)
+                        size = LLVMStoreSizeOfType(targetData, lType);
+                    else
+                        // Fallback sem TargetData (assumimos primitiva basica)
+                        size = 1; 
+
+                    if (size >= maxSize)
+                    {
+                        maxSize = size;
+                        largestMemberType = lType;
+                    }
+                }
+
+                if (largestMemberType is null)
+                    largestMemberType = LLVMInt8TypeInContext(context); // Fallback para union vazia
+
+                LLVMTypeRef[] body_ = [largestMemberType];
+                LLVMStructSetBody(unionTypes[u.name], body_.ptr, 1, 0); // Packed = 0
             }
         }
 
@@ -122,8 +158,8 @@ class LLVMBackend
         return LLVMFunctionType(retType, paramTypes.ptr, cast(uint)paramTypes.length, 0);
     }
 
-    LLVMTypeRef toLLVMType(Type t) {
-        
+    LLVMTypeRef toLLVMType(Type t)
+    {
         if (t is null) 
         {
             writeln("CRITICAL TYPE ERROR: MirValue passed to the backend has a null type!");
@@ -144,14 +180,24 @@ class LLVMBackend
                 case BaseType.String: return LLVMPointerTypeInContext(context, 0); // i8*
                 default: return LLVMVoidTypeInContext(context);
             }
+        
         if (auto structTy = cast(StructType) t) 
         {
             // Se já registramos a struct, retorne o tipo LLVM
-            if (structTy.name in structTypes)
-                return structTypes[structTy.name];
-            writeln("Critical Error: Struct ", structTy.name, " was not pre-declared in the backend!");
+            if (structTy.mangledName in structTypes)
+                return structTypes[structTy.mangledName];
+            writeln("Critical Error: Struct ", structTy.mangledName, " was not pre-declared in the backend!");
             return LLVMVoidTypeInContext(context);
         }
+        
+        if (UnionType un = cast(UnionType) t) 
+        {
+            if (un.mangledName in unionTypes)
+                return unionTypes[un.mangledName];
+            writeln("Critical Error: Union ", un.name, " was not pre-declared in the backend!");
+            return LLVMVoidTypeInContext(context);
+        }
+
         if (ArrayType arr = cast(ArrayType) t) {
             // Converte o tipo do elemento (ex: int -> i32)
             LLVMTypeRef elemType = toLLVMType(arr.elementType);
@@ -165,6 +211,9 @@ class LLVMBackend
         
         if (cast(FunctionType) t)
             return LLVMPointerTypeInContext(context, 0); 
+
+        if (cast(EnumType) t)
+            return LLVMInt32TypeInContext(context); 
         
         return LLVMVoidTypeInContext(context);
     }

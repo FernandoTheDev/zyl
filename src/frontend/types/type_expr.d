@@ -213,52 +213,6 @@ class PointerTypeExpr : TypeExpr
     }
 }
 
-class UnionTypeExpr : TypeExpr
-{
-    TypeExpr[] types;
-
-    this(TypeExpr[] types, Loc loc)
-    {
-        this.types = types;
-        this.loc = loc;
-    }
-
-    override string toStr()
-    {
-        import std.algorithm : map;
-        import std.array : join;
-
-        return types.map!(t => t.toStr()).join(" | ");
-    }
-
-    override TypeExpr clone()
-    {
-        import std.algorithm : map;
-        import std.array : array;
-
-        return new UnionTypeExpr(
-            types.map!(t => t.clone()).array,
-            loc
-        );
-    }
-
-    override void print(ulong ident = 0, bool isLast = false)
-    {
-        import std.stdio : write, writeln;
-        import std.array : replicate;
-
-        string prefix = "  ".replicate(cast(size_t) ident);
-        string branch = isLast ? "└── " : "├── ";
-
-        writeln(prefix, branch, "UnionTypeExpr");
-
-        foreach (i, type; types)
-        {
-            type.print(ident + 1, i == cast(int) types.length - 1);
-        }
-    }
-}
-
 class StructTypeExpr : TypeExpr
 {
     string structName;
@@ -288,5 +242,69 @@ class StructTypeExpr : TypeExpr
         string branch = isLast ? "└── " : "├── ";
 
         writeln(prefix, branch, "StructTypeExpr: ", structName);
+    }
+}
+
+class EnumTypeExpr : TypeExpr
+{
+    string enumName;
+
+    this(string enumName, Loc loc)
+    {
+        this.enumName = enumName;
+        this.loc = loc;
+    }
+
+    override string toStr()
+    {
+        return enumName; // Or "enum " ~ enumName
+    }
+
+    override TypeExpr clone()
+    {
+        return new EnumTypeExpr(enumName, loc);
+    }
+
+    override void print(ulong ident = 0, bool isLast = false)
+    {
+        import std.stdio : write, writeln;
+        import std.array : replicate;
+
+        string prefix = "  ".replicate(cast(size_t) ident);
+        string branch = isLast ? "└── " : "├── ";
+
+        writeln(prefix, branch, "EnumTypeExpr: ", enumName);
+    }
+}
+
+class UnionTypeExpr : TypeExpr
+{
+    string unionName;
+
+    this(string unionName, Loc loc)
+    {
+        this.unionName = unionName;
+        this.loc = loc;
+    }
+
+    override string toStr()
+    {
+        return unionName; // Or "union " ~ unionName
+    }
+
+    override TypeExpr clone()
+    {
+        return new UnionTypeExpr(unionName, loc);
+    }
+
+    override void print(ulong ident = 0, bool isLast = false)
+    {
+        import std.stdio : write, writeln;
+        import std.array : replicate;
+
+        string prefix = "  ".replicate(cast(size_t) ident);
+        string branch = isLast ? "└── " : "├── ";
+
+        writeln(prefix, branch, "UnionTypeExpr: ", unionName);
     }
 }

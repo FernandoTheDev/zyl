@@ -3,7 +3,8 @@ module middle.mir.lowering;
 import middle.hir.hir;
 import middle.mir.mir;
 import frontend.types.type;
-import std.stdio : writeln;
+import std.conv, std.stdio : writeln;
+import std.range : retro;
 
 class HirToMir {
     MirFunction currentFunc;
@@ -11,9 +12,16 @@ class HirToMir {
     MirValue[string] varMap;
     MirProgram mirProgram;
 
+    struct DeferScope {
+        HirNode[] stmts;
+    }
+
+    DeferScope[] deferStack;
+
     struct LoopContext {
         string continueLabel; // Para onde 'continue' vai
         string breakLabel;    // Para onde 'break' vai
+        size_t deferDepth;    // Quantos escopos de defer existiam antes de entrar no loop
     }
 
     LoopContext[] loopStack;
@@ -40,6 +48,51 @@ class HirToMir {
 
 private:
 
+    void pushDeferScope() {
+        deferStack ~= DeferScope([]);
+    }
+
+    void popDeferScope() {
+        if (deferStack.length > 0)
+            deferStack.length--;
+    }
+
+    void addDefer(HirNode stmt) {
+        if (deferStack.length > 0)
+            deferStack[$-1].stmts ~= stmt;
+    }
+
+    // Executa defers do escopo atual (ao chegar no '}')
+    void emitDefersForTopScope() {
+        if (deferStack.length == 0) return;
+        // Ordem reversa (LIFO)
+        foreach (stmt; deferStack[$-1].stmts.retro) {
+            lowerStmt(stmt);
+        }
+    }
+
+    // Executa TODOS os defers (para 'return')
+    void emitAllDefers() {
+        foreach (scope_; deferStack.retro) {
+            foreach (stmt; scope_.stmts.retro) {
+                lowerStmt(stmt);
+            }
+        }
+    }
+
+    // Executa defers até atingir uma certa profundidade (para break/continue)
+    void emitDefersDownTo(size_t targetDepth) {
+        // Itera de cima para baixo na pilha até chegar no targetDepth
+        // Ex: Stack size 5, target 3 -> processa indices 4 e 3.
+        long currentIdx = cast(long)deferStack.length - 1;
+        while (currentIdx >= cast(long)targetDepth) {
+            foreach (stmt; deferStack[currentIdx].stmts.retro) {
+                lowerStmt(stmt);
+            }
+            currentIdx--;
+        }
+    }
+
     void clearMap()
     {
         foreach (string idx, MirValue val; varMap)
@@ -58,6 +111,8 @@ private:
         currentFunc.isVarArg = hirFunc.isVarArg;
         currentFunc.isVarArgAt = hirFunc.isVarArgAt;
         clearMap();
+        deferStack = [];
+        loopStack = [];
 
         // 1. Injeção do tipo 'int' na assinatura MIR (se for VarArg nativa)
         if (hirFunc.isVarArg && hirFunc.body !is null)
@@ -90,8 +145,7 @@ private:
             emit(new MirInstr(MirOp.Alloca, ptrReg));
 
             auto argVal = MirValue.argument(llvmArgIndex, type);
-            emitStore(argVal, ptrReg);
-
+            // emitStore(argVal, ptrReg);
             varMap[argName] = ptrReg;
         }
 
@@ -120,12 +174,37 @@ private:
 
     void lowerBlock(HirBlock block) 
     {
-        if (block !is null)
-            foreach (stmt; block.stmts)
-                lowerStmt(stmt);
+        if (block is null)
+            return;
+        
+        pushDeferScope();
+
+        foreach (stmt; block.stmts)
+        {
+            // Se for defer, guarda pra depois
+            if (stmt.kind == HirNodeKind.Defer) {
+                // Assume que HirDefer tem um campo 'value' ou 'stmt' que é o HirNode a ser executado
+                // Baseado no seu código anterior de lowering:
+                addDefer((cast(HirDefer)stmt).value);
+                continue;
+            }
+
+            lowerStmt(stmt);
+            
+            // Se encontrou um terminador (return, break, continue), paramos
+            // O lowerStmt desses caras já cuidou de emitir os defers apropriados
+            if (blockHasTerminator(currentBlock)) break;
+        }
+
+        // 2. Se o fluxo chegou ao fim do bloco naturalmente (sem return/break),
+        // executamos os defers deste escopo agora.
+        if (!blockHasTerminator(currentBlock))
+            emitDefersForTopScope();
+
+        // 3. Fecha escopo
+        popDeferScope();
     }
 
-    // Copia o CONTEÚDO de um array sourcePtr para destPtr
     void emitArrayCopy(MirValue sourcePtr, MirValue destPtr, Type type)
     {
         auto arrType = cast(ArrayType) type;
@@ -189,10 +268,7 @@ private:
             if (auto subLit = cast(HirArrayLit) elemExpr) 
                 fillArray(elemPtr, subLit);
             else 
-            {
-                auto val = lowerExpr(elemExpr);
-                emitStore(val, elemPtr);
-            }
+                emitStore(lowerExpr(elemExpr), elemPtr);
         }
     }
 
@@ -202,6 +278,10 @@ private:
 
         switch (stmt.kind) 
         {
+            case HirNodeKind.Defer:
+                addDefer((cast(HirDefer)stmt).value);
+                break;
+
             case HirNodeKind.VarDecl:
                 HirVarDecl var = cast(HirVarDecl) stmt;
                 auto ptrType = new PointerType(var.type);
@@ -264,9 +344,20 @@ private:
 
             case HirNodeKind.Return:
                 auto ret = cast(HirReturn) stmt;
+                
+                MirValue retVal;
+                // 1. Calcula o valor de retorno ANTES de executar os defers
+                // (pois defers podem alterar estado, mas não o valor já avaliado do return)
+                if (ret.value !is null) 
+                    retVal = lowerExpr(ret.value);
+
+                // 2. Executa TODOS os defers da pilha (LIFO)
+                emitAllDefers();
+
+                // 3. Emite instrução Ret
                 auto instr = new MirInstr(MirOp.Ret);
                 if (ret.value !is null) 
-                    instr.operands ~= lowerExpr(ret.value);
+                    instr.operands ~= retVal;
                 emit(instr);
                 break;
 
@@ -275,13 +366,38 @@ private:
                 break;
 
             case HirNodeKind.AssignDecl:
-                auto assign = cast(HirAssignDecl) stmt;
+                HirAssignDecl assign = cast(HirAssignDecl) stmt;
                 auto val = lowerExpr(assign.value);
-                auto target = lowerLValue(assign.target); // Usa a função corrigida acima
+                auto target = lowerLValue(assign.target);
                 if (assign.target.type.isArray()) 
                     emitArrayCopy(val, target, assign.target.type);
-                else 
+                else {
+                    string op = assign.op;
+                    bool ass = false;
+
+                    if (op == "+=" || op == "-=" || op == "*=" || op == "/=" || op == "%=")
+                    {
+                        ass = true;
+                        op = to!string(op[0]);
+                    }
+
+                    if (ass) {
+                        if (HirAddrOf addr = cast(HirAddrOf)assign.target) {
+                            HirBinary binary = new HirBinary();
+                            HirLoad load = new HirLoad();
+                            load.ptr = assign.target;
+                            load.varName = addr.varName;
+                            load.type = addr.type;
+                            binary.left = load;
+                            binary.right = assign.value;
+                            binary.op = op;
+                            binary.type = val.type;
+                            val = lowerExpr(binary);
+                        }
+                    }
+
                     emitStore(val, target);
+                }
                 break;
 
             case HirNodeKind.Break:
@@ -290,6 +406,8 @@ private:
                     writeln("Error: Break outside of loop");
                     return;
                 }
+                // Executa defers até o nível do loop alvo
+                emitDefersDownTo(loopStack[$-1].deferDepth);
                 // Pega o topo da pilha e pula para o breakLabel
                 emitBr(loopStack[$-1].breakLabel);
                 // (dead block) após o break
@@ -304,6 +422,8 @@ private:
                     writeln("Error: Continue outside of loop");
                     return;
                 }
+                // Executa defers até o nível do loop alvo
+                emitDefersDownTo(loopStack[$-1].deferDepth);
                 // Pega o topo da pilha e pula para o continueLabel
                 emitBr(loopStack[$-1].continueLabel);
                 // Mesma lógica do dead block
@@ -375,7 +495,7 @@ private:
         br.operands = [c, MirValue.block(bodyName), MirValue.block(endName)];
         emit(br);
         
-        loopStack ~= LoopContext(condName, endName);
+        loopStack ~= LoopContext(condName, endName, deferStack.length);
         auto bodyBB = new MirBasicBlock(bodyName);
         currentFunc.blocks ~= bodyBB;
         currentBlock = bodyBB;
@@ -415,7 +535,7 @@ private:
             // "for (;;)" loop infinito
             emitBr(bodyName);
 
-        loopStack ~= LoopContext(incName, endName);
+        loopStack ~= LoopContext(condName, endName, deferStack.length);
         auto bodyBB = new MirBasicBlock(bodyName);
         currentFunc.blocks ~= bodyBB;
         currentBlock = bodyBB;
@@ -570,16 +690,20 @@ private:
                 else if (bin.op == "*") op = isFloatOp ? MirOp.FMul : MirOp.Mul;
                 else if (bin.op == "/") op = isFloatOp ? MirOp.FDiv : MirOp.Div;
                 else if (bin.op == "%") op = isFloatOp ? MirOp.FRem : MirOp.SRem;
-                
                 else if (bin.op == "<<") op = MirOp.Shl;
                 else if (bin.op == ">>") op = MirOp.Shr;
-                
                 else if (bin.op == "==" || bin.op == "!=" || 
                          bin.op == "<"  || bin.op == "<=" || 
                          bin.op == ">"  || bin.op == ">=")
                     op = isFloatOp ? MirOp.FCmp : MirOp.ICmp;
+                else if (bin.op == "^") op = MirOp.BXor;
+                else if (bin.op == "|") op = MirOp.BOr;
+                else if (bin.op == "~") op = MirOp.BNot;
                 else
-                    op = MirOp.Add; 
+                    op = MirOp.Add;
+
+                // store
+                // left is a var
 
                 auto instr = new MirInstr(op);
                 instr.dest = dest;
@@ -624,21 +748,6 @@ private:
             case HirNodeKind.AddrOf:
                 return varMap[(cast(HirAddrOf)expr).varName];
 
-            // case HirNodeKind.CallExpr:
-            //     auto call = cast(HirCallExpr) expr;
-            //     auto dest = currentFunc.newReg(call.type);
-            //     auto instr = new MirInstr(MirOp.Call);
-            //     instr.dest = dest;
-                
-            //     MirValue funcNameVal; 
-            //     funcNameVal.isConst = true; 
-            //     funcNameVal.constStr = call.funcName;
-            //     instr.operands ~= funcNameVal;
-                
-            //     foreach(arg; call.args) instr.operands ~= lowerExpr(arg);
-            //     emit(instr);
-            //     return dest;
-
             case HirNodeKind.CallExpr:
                 HirCallExpr call = cast(HirCallExpr) expr;
                 auto dest = currentFunc.newReg(call.type);
@@ -681,10 +790,6 @@ private:
                     instr.operands ~= argVal;
                 }
 
-                // 3. CASO BORDA: Chamada sem passar nenhum argumento variádico
-                // Ex: fn log(int level, ...); log(1);
-                // splitIndex é 1. O loop vai de 0 a 1.
-                // Quando i=0, não injeta. O loop acaba. Precisamos injetar o 0 no final.
                 if (injectCount) 
                 {
                     auto countVal = MirValue.i32(0, new PrimitiveType(BaseType.Int));
@@ -701,11 +806,36 @@ private:
                 
                 MirOp op = MirOp.BitCast; // Fallback padrão
 
+                bool isPtr(Type t)
+                {
+                    if (cast(PointerType) t) return true;
+                    // Em Zyl, string é char*, então conta como pointer
+                    if (auto prim = cast(PrimitiveType) t) 
+                        return prim.baseType == BaseType.String; 
+                    return false;
+                }
+
+                bool isInteger(Type t)
+                {
+                    if (auto prim = cast(PrimitiveType) t) {
+                        return prim.baseType == BaseType.Int || 
+                               prim.baseType == BaseType.Long || 
+                               prim.baseType == BaseType.Char ||
+                               prim.baseType == BaseType.Bool; 
+                    }
+                    return false;
+                }
+
+                bool srcPtr = isPtr(val.type);
+                bool dstPtr = isPtr(c.targetType);
+
                 bool srcChar = false;
                 if (auto primitive = cast(PrimitiveType)val.type)
                     srcChar = primitive.baseType == BaseType.Char;
+                bool srcInteger = isInteger(val.type);
                 bool srcInt = isInt(val.type);
                 bool srcLong = isLong(val.type);
+                bool dstInteger = isInteger(c.targetType);
                 bool dstInt = isInt(c.targetType);
                 bool dstLong = isLong(c.targetType);
 
@@ -720,7 +850,18 @@ private:
                 bool srcNumeric = srcInt || srcLong || srcFloat || srcDouble || srcChar;
                 bool dstNumeric = dstInt || dstLong || dstFloat || dstDouble || dstChar;
 
-                if (srcNumeric && dstNumeric)
+                // writeln("1 isInt? ", srcInteger, " | ", val.type.toStr());
+                // writeln("1 isPtr? ", dstPtr, " | ", c.targetType.toStr());
+                // writeln("2 isPtr? ", srcPtr, " | ", val.type.toStr());
+                // writeln("2 isInt? ", dstInteger, " | ", c.targetType.toStr());
+
+                if (srcInteger && dstPtr) {
+                    op = MirOp.IntToPtr;
+                }
+                else if (srcPtr && dstInteger) {
+                    op = MirOp.PtrToInt;
+                }
+                else if (srcNumeric && dstNumeric)
                 {
                     // Inteiro <-> Ponto Flutuante
                     if ((srcInt || srcLong || srcChar) && (dstFloat || dstDouble))
@@ -756,8 +897,8 @@ private:
                 // WORKAROUND: Se o tipo é POINTER, estamos processando um &tokens[j]
                 // onde o parser errou e colocou o & no lugar errado.
                 // Neste caso, NÃO devemos fazer Load!
-                if (cast(PointerType) idx.type)
-                    return lowerLValue(expr);
+                // if (cast(PointerType) idx.type)
+                //     return lowerLValue(expr);
 
                 auto ptr = lowerLValue(expr);
                 auto dest = currentFunc.newReg(expr.type);
@@ -826,15 +967,14 @@ private:
                     emit(new MirInstr(un.op == "++_postfix" ? addOp : subOp, newVal, [oldVal, one]));
                     // 4. Salvar o novo valor.
                     emit(new MirInstr(MirOp.Store, MirValue.init, [newVal, ptr]));
-                    
                     // 5. O resultado da expressão pré-fixada é o NOVO valor (newVal)
-                    return newVal;
+                    return oldVal;
                 }
                 // Se não for um dos operadores acima, retorna MirValue nulo
                 return MirValue();
 
             case HirNodeKind.MemberAccess:
-                auto mem = cast(HirMemberAccess) expr;
+                HirMemberAccess mem = cast(HirMemberAccess) expr;
 
                 MirValue basePtr;
 
@@ -867,7 +1007,16 @@ private:
                 // Se o target é Load de uma variável
                 else if (mem.target.kind == HirNodeKind.Load) 
                 {
-                    auto load = cast(HirLoad) mem.target;
+                    HirLoad load = cast(HirLoad) mem.target;
+
+                    if (EnumType enm = cast(EnumType) load.type)
+                    {
+                        // carrega o valor do field
+                        int value = enm.getMemberValue(mem.memberName);
+                        Type t = new PrimitiveType(BaseType.Int);
+                        basePtr = currentFunc.newReg(t);
+                        return MirValue.i32(value, t);
+                    }
 
                     if (cast(PointerType) mem.target.type) 
                     {
@@ -966,6 +1115,16 @@ private:
                 auto destStruct = currentFunc.newReg(lit.type);
                 emit(new MirInstr(MirOp.Load, destStruct, [structPtr]));
                 return destStruct;
+
+            case HirNodeKind.AssignExpr:
+                auto ae = cast(HirAssignExpr) expr;
+                // Executa a atribuição
+                lowerStmt(ae.assign);
+                // Retorna o valor (faz Load do target)
+                auto ptr = lowerLValue(ae.assign.target);
+                auto dest = currentFunc.newReg(ae.type);
+                emit(new MirInstr(MirOp.Load, dest, [ptr]));
+                return dest;
 
             default: return MirValue();
         }

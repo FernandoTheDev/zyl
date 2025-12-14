@@ -1,0 +1,8 @@
+import std.libc.io : { printf }
+
+void main() {
+    if ((void*)0) == null
+        printf("All right sir.")
+    else
+        printf("WELL WELL WELL")
+}

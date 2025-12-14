@@ -7,6 +7,7 @@ enum BaseType : string
     String = "string",
     Char = "char",
     Int = "int",
+    Byte = "byte",
     Long = "long",
     Float = "float",
     Double = "double",
@@ -95,19 +96,16 @@ class PrimitiveType : Type
     {
         STRICT_COMPAT = [
             BaseType.Int: [
-                BaseType.Long, BaseType.Char
+                BaseType.Long, BaseType.Char, BaseType.Bool
             ],
             BaseType.Long: [BaseType.Double],
             BaseType.Float: [BaseType.Double],
             BaseType.Double: [],
             BaseType.Bool: [
-                BaseType.Int, BaseType.Long, BaseType.Float, BaseType.Double
+                BaseType.Int, BaseType.Long
             ],
-            BaseType.String: [
-                BaseType.Int, BaseType.Long, BaseType.Float, BaseType.Double,
-                BaseType.Bool, BaseType.Char
-            ],
-            BaseType.Char: [BaseType.Int]
+            BaseType.String: [],
+            BaseType.Char: [BaseType.Int, BaseType.Long]
         ];
 
         LIBERAL_COMPAT = [
@@ -135,7 +133,7 @@ class PrimitiveType : Type
                 BaseType.Int, BaseType.Long, BaseType.Float,
                 BaseType.Double, BaseType.Bool
             ],
-            BaseType.Char: [BaseType.Int]
+            BaseType.Char: [BaseType.Int, BaseType.Long]
         ];
     }
 
@@ -147,6 +145,11 @@ class PrimitiveType : Type
     override bool isPrimitive()
     {
         return true;
+    }
+
+    bool isInteger()
+    {
+        return baseType == BaseType.Int || baseType == BaseType.Long;
     }
 
     override bool isNumeric()
@@ -181,6 +184,10 @@ class PrimitiveType : Type
 
         if (auto fn = cast(FunctionType) other)
             return isCompatibleWith(fn.returnType);
+
+        if (PointerType ptr = cast(PointerType) other)
+            if (isInteger() && ptr.toStr() == "void*")
+                return true;
 
         return false;
     }
@@ -306,78 +313,6 @@ class ArrayType : Type
     }
 }
 
-class UnionType : Type
-{
-    Type[] types;
-
-    this(Type[] types)
-    {
-        this.types = types;
-    }
-
-    override bool isCompatibleWith(Type other, bool strict = true)
-    {
-        // se other for um UnionType, verifica se todos os tipos de other
-        // são compatíveis com pelo menos um tipo deste union
-        if (auto otherUnion = cast(UnionType) other)
-        {
-            foreach (otherType; otherUnion.types)
-                foreach (thisType; types)
-                    if (thisType.isCompatibleWith(otherType, strict))
-                        return true;
-            return false;
-        }
-
-        // Se other for um tipo simples, verifica se é compatível
-        // com pelo menos um dos tipos do union
-        foreach (type; types)
-            if (type.isCompatibleWith(other, strict))
-                return true;
-
-        return false;
-    }
-
-    override string toStr()
-    {
-        return types.map!(t => t.toStr()).join(" | ");
-    }
-
-    override Type clone()
-    {
-        return new UnionType(types.map!(t => t.clone()).array);
-    }
-
-    override bool isNumeric()
-    {
-        // Um union é numérico se todos os seus tipos forem numéricos
-        foreach (type; types)
-            if (!type.isNumeric())
-                return false;
-        return types.length > 0;
-    }
-
-    override bool isUnion()
-    {
-        return true;
-    }
-
-    // Verifica se o union contém um tipo específico
-    bool containsType(Type type)
-    {
-        foreach (t; types)
-            if (t.isCompatibleWith(type, true))
-                return true;
-        return false;
-    }
-
-    // Adiciona um novo tipo ao union (evita duplicatas)
-    void addType(Type type)
-    {
-        if (!containsType(type))
-            types ~= type;
-    }
-}
-
 class PointerType : Type
 {
     Type pointeeType;
@@ -394,6 +329,10 @@ class PointerType : Type
                 return true;
             return pointeeType.isCompatibleWith(otherPtr.pointeeType, strict);
         }
+        if (!strict)
+            if (PrimitiveType primi = cast(PrimitiveType) other)
+                if (primi.baseType == BaseType.Int || primi.baseType == BaseType.Long)
+                    return true;
         return false;
     }
 
@@ -473,20 +412,22 @@ class StructType : Type
 {
     string name;
     StructField[] fields;
-    StructMethod[] methods;
+    StructMethod[][string] methods;
+    string mangledName;
     
-    // Mapeia nome do campo para seu índice
     private int[string] fieldIndexMap;
 
-    this(string name, StructField[] fields = [], StructMethod[] methods = [])
+    this(string name, StructField[] fields = [], StructMethod[][string] methods, string mangledName = "")
     {
         this.name = name;
         this.fields = fields;
-        this.methods = methods;
+        if (mangledName == "")
+            this.mangledName = name;
         
-        // Constrói o mapa de campos
         foreach (i, field; fields)
             fieldIndexMap[field.name] = cast(int) i;
+        
+        this.methods = methods;
     }
 
     override bool isCompatibleWith(Type other, bool strict = true)
@@ -502,12 +443,15 @@ class StructType : Type
 
     override string toStr()
     {
-        return name;
+        return mangledName;
     }
 
     override Type clone()
     {
-        return new StructType(name, fields.dup, methods.dup);
+        StructMethod[][string] methodsCopy;
+        foreach (methodName, overloads; methods)
+            methodsCopy[methodName] = overloads.dup;
+        return new StructType(name, fields.dup, methodsCopy, mangledName);
     }
 
     override bool isStruct()
@@ -515,7 +459,6 @@ class StructType : Type
         return true;
     }
 
-    // Busca um campo pelo nome
     StructField* getField(string fieldName)
     {
         if (auto idx = fieldName in fieldIndexMap)
@@ -523,21 +466,306 @@ class StructType : Type
         return null;
     }
 
-    // Busca um método pelo nome
+    bool addMethod(StructMethod newMethod)
+    {
+        string methodName = newMethod.funcDecl.name;        
+        if (methodName in methods)
+        {
+            auto existingOverloads = methods[methodName];
+            foreach (StructMethod existing; existingOverloads)
+                if (isSameMethodSignature(newMethod, existing))
+                    // Assinaturas idênticas - erro
+                    return false;
+                // Validação @nomangle para métodos
+                else if (newMethod.funcDecl.noMangle && existing.funcDecl.noMangle)
+                    return false;
+            methods[methodName] ~= newMethod;
+        }
+        else
+            methods[methodName] = [newMethod];
+        return true;
+    }
+
+    bool isSameMethodSignature(StructMethod a, StructMethod b)
+    {
+        // Construtores são sempre únicos (não podem ter overload por assinatura)
+        if (a.isConstructor && b.isConstructor)
+        {
+            // Verifica parâmetros
+            if (a.funcDecl.args.length != b.funcDecl.args.length)
+                return false;
+            
+            foreach (i, paramA; a.funcDecl.args)
+            {
+                auto paramB = b.funcDecl.args[i];
+                if (paramA.resolvedType is null || paramB.resolvedType is null)
+                    continue;
+                if (paramA.resolvedType.toStr() != paramB.resolvedType.toStr())
+                    return false;
+            }
+            return true;
+        }
+
+        // Para métodos normais, compara parâmetros
+        if (a.funcDecl.args.length != b.funcDecl.args.length)
+            return false;
+
+        foreach (i, paramA; a.funcDecl.args)
+        {
+            auto paramB = b.funcDecl.args[i];
+            if (paramA.resolvedType is null || paramB.resolvedType is null)
+                continue;
+            if (paramA.resolvedType.toStr() != paramB.resolvedType.toStr())
+                return false;
+        }
+
+        return true;
+    }
+
+    StructMethod[] resolveMethods(string methodName)
+    {
+        if (methodName in methods)
+            return methods[methodName];
+        return [];
+    }
+
     StructMethod* getMethod(string methodName)
     {
-        foreach (ref method; methods)
-            if (method.funcDecl.name == methodName)
-                return &method;
+        auto overloads = resolveMethods(methodName);
+        if (overloads.length > 0)
+            return &overloads[0];
         return null;
     }
 
-    // Busca construtor
     StructMethod* getConstructor()
     {
-        foreach (ref method; methods)
-            if (method.isConstructor)
-                return &method;
+        foreach (overloads; methods)
+            foreach (ref method; overloads)
+                if (method.isConstructor)
+                    return &method;
+        return null;
+    }
+
+    StructMethod* findMethod(string methodName, Type[] argTypes)
+    {
+        auto candidates = resolveMethods(methodName);
+        if (candidates.length == 0)
+            return null;
+
+        StructMethod* bestMatch = null;
+        int bestScore = 999_999;
+
+        foreach (ref StructMethod cand; candidates)
+        {
+            // Verifica se o método tem parâmetros variádicos
+            bool hasVariadic = false;
+            size_t minargs = cand.funcDecl.args.length;
+
+            foreach (i, param; cand.funcDecl.args)
+            {
+                if (param.resolvedType is null)
+                {
+                    hasVariadic = true;
+                    minargs = i;
+                    break;
+                }
+            }
+
+            // IMPORTANTE: O primeiro parâmetro é o 'self', então comparamos a partir do índice 1
+            size_t expectedParamsWithoutSelf = cand.funcDecl.args.length > 0 ? 
+                cast(int)cand.funcDecl.args.length - 1 : 0;
+
+            // Validação de número de argumentos (SEM contar o self)
+            if (hasVariadic)
+            {
+                size_t minArgsWithoutSelf = minargs > 0 ? minargs - 1 : 0;
+                if (argTypes.length < minArgsWithoutSelf)
+                    continue;
+            }
+            else
+            {
+                if (argTypes.length != expectedParamsWithoutSelf)
+                    continue;
+            }
+
+            int currentScore = 0;
+            bool compatible = true;
+
+            size_t argsToCheck = hasVariadic ? (minargs > 0 ? minargs - 1 : 0) : expectedParamsWithoutSelf;
+
+            // Compara os argumentos (pulando o primeiro que é o self)
+            foreach (i; 0 .. argsToCheck)
+            {
+                // +1 para pular o self nos parâmetros da função
+                Type expected = cand.funcDecl.args[i + 1].resolvedType;
+                Type received = argTypes[i];
+
+                if (received is null || expected is null)
+                {
+                    compatible = false;
+                    break;
+                }
+
+                if (expected.toStr() == received.toStr())
+                    currentScore += 0; // Match exato
+                else if (expected.isCompatibleWith(received))
+                    currentScore += 1; // Match com conversão implícita
+                else
+                {
+                    compatible = false;
+                    break;
+                }
+            }
+
+            if (compatible && currentScore < bestScore)
+            {
+                bestScore = currentScore;
+                bestMatch = &cand;
+            }
+        }
+
+        return bestMatch;
+    }
+
+    Type getFieldType(string fieldName)
+    {
+        if (auto field = getField(fieldName))
+            return field.resolvedType;
+        return null;
+    }
+
+    bool hasField(string fieldName)
+    {
+        return (fieldName in fieldIndexMap) !is null;
+    }
+
+    bool hasMethod(string methodName)
+    {
+        return (methodName in methods) !is null;
+    }
+
+    size_t fieldCount()
+    {
+        return fields.length;
+    }
+
+    void rebuildFieldIndexMap()
+    {
+        fieldIndexMap.clear();
+        foreach (i, field; fields)
+            fieldIndexMap[field.name] = cast(int) i;
+    }
+
+    StructMethod[] getAllMethods()
+    {
+        StructMethod[] result;
+        foreach (overloads; methods)
+            result ~= overloads;
+        return result;
+    }
+}
+
+class EnumType : Type
+{
+    string name;
+    // Maps member name to its integer value (e.g., "RED" -> 0)
+    int[string] members;
+
+    this(string name, int[string] members)
+    {
+        this.name = name;
+        this.members = members;
+    }
+
+    override bool isEnum()
+    {
+        return true;
+    }
+
+    override bool isCompatibleWith(Type other, bool strict = true)
+    {
+        // Enums are strictly compatible with themselves
+        if (auto otherEnum = cast(EnumType) other)
+        {
+            return this.name == otherEnum.name;
+        }
+        
+        if (auto prim = cast(PrimitiveType) other)
+            return prim.baseType == BaseType.Int;
+        
+        return false;
+    }
+
+    override string toStr()
+    {
+        return "enum " ~ name;
+    }
+
+    override Type clone()
+    {
+        return new EnumType(name, members.dup);
+    }
+    
+    // Helper to check if a value is valid for this enum
+    bool hasMember(string memberName)
+    {
+        return (memberName in members) !is null;
+    }
+    
+    int getMemberValue(string memberName)
+    {
+        if (auto val = memberName in members)
+            return *val;
+        return -1; // Or throw error
+    }
+}
+
+class UnionType : Type
+{
+    string name;
+    StructField[] fields;
+    private int[string] fieldIndexMap;
+    string mangledName;
+
+    this(string name, StructField[] fields, string mangledName = "")
+    {
+        this.name = name;
+        this.fields = fields;
+        if (mangledName == "")
+            this.mangledName = name;
+
+        foreach (i, field; fields)
+            fieldIndexMap[field.name] = cast(int) i;
+    }
+
+    override bool isUnion()
+    {
+        return true;
+    }
+    
+    override bool isCompatibleWith(Type other, bool strict = true)
+    {
+        if (other.toStr() == "void*") return true;
+        if (auto otherUnion = cast(UnionType) other)
+            return name == otherUnion.name;
+        return false;
+    }
+
+    override string toStr()
+    {
+        return "union " ~ mangledName;
+    }
+
+    override Type clone()
+    {
+        return new UnionType(name, fields.dup, mangledName);
+    }
+
+    // Busca um campo pelo nome
+    StructField* getField(string fieldName)
+    {
+        if (auto idx = fieldName in fieldIndexMap)
+            return &fields[*idx];
         return null;
     }
 
@@ -554,17 +782,15 @@ class StructType : Type
     {
         return (fieldName in fieldIndexMap) !is null;
     }
-
-    // Verifica se tem um método específico
-    bool hasMethod(string methodName)
+    
+    // Helper to get largest member for backend sizing
+    Type getLargestMember()
     {
-        return getMethod(methodName) !is null;
-    }
-
-    // Retorna número de campos
-    size_t fieldCount()
-    {
-        return fields.length;
+        // Implementation logic for backend sizing would go here
+        // or be handled in a separate utility. 
+        // Since Type doesn't have size info yet, this might be premature 
+        // without a size calculator.
+        return null; 
     }
 
     void rebuildFieldIndexMap()

@@ -19,7 +19,6 @@ int sum(...) {
 
 int main() {
     int n = sum(10, 20, 30, 40, 69)
-    int (...) a = &sum
     printf("%d\n", n)
     return 0
 }

@@ -1,8 +1,8 @@
 int printf (string msg, ...);
 
 int main() {
-    int age = 17 | 10
-    float cast = *((f32*) &age)
+    int age = 17
+    float cast = *((float*) &age)
     double wow = (double) cast
 
     wow = 10.10

@@ -1,0 +1,121 @@
+import std.libc.mem : { malloc, realloc, free, memcpy }
+import std.libc.io : { printf, exit }
+import std.arena : { Arena }
+
+struct Vector {
+    // Backbone: Array de ponteiros (void**) no Heap padrão
+    void** data = null
+    int length = 0
+    int capacity = 0
+    int element_size = 0
+    
+    // Ponteiro para a arena que vamos usar (pode ser a interna ou externa)
+    Arena* allocator = null
+    
+    // Armazenamento para caso a arena seja interna
+    Arena _internal_arena = Arena{}
+    bool owns_allocator = false
+
+    // Inicialização com arena interna
+    void init(Vector* self, int element_size) {
+        self.data = null
+        self.length = 0
+        self.capacity = 0
+        self.element_size = element_size
+        
+        // Configura para usar a arena interna
+        self._internal_arena.create(4096)
+        self.allocator = &(self._internal_arena)
+        self.owns_allocator = true
+    }
+    
+    // Inicialização com arena externa (Referência!)
+    void init_with_arena(Vector* self, int element_size, Arena* arena_ptr) {
+        self.data = null
+        self.length = 0
+        self.capacity = 0
+        self.element_size = element_size
+        
+        // Aponta para a arena externa
+        self.allocator = arena_ptr
+        self.owns_allocator = false
+    }
+
+    void push(Vector* self, void* value_ptr) {
+        // 1. Redimensiona a espinha dorsal (Array de ponteiros)
+        if self.length >= self.capacity {
+            int new_cap = 0
+            if self.capacity == 0 { new_cap = 8 }
+            else { new_cap = self.capacity * 2 }
+            
+            // void** ocupa 8 bytes (64-bit)
+            int new_byte_size = new_cap * 8
+            
+            // Segurança no Realloc: usar var temporária
+            void* temp = realloc(self.data, new_byte_size)
+            if temp == null {
+                printf("Vector: Realloc failed (Backbone)\n")
+                exit(1)
+            }
+            self.data = (void**) temp
+            self.capacity = new_cap
+        }
+
+        // 2. Aloca o DADO REAL na Arena
+        // Usamos self.allocator->alloc(...)
+        void* storage = self.allocator.alloc(self.element_size)
+        if storage == null {
+            printf("Vector: Arena out of memory\n")
+            exit(1)
+        }
+        
+        // 3. Copia os bytes para a arena
+        memcpy(storage, value_ptr, self.element_size)
+        
+        // 4. Guarda o ponteiro no array
+        self.data[self.length] = storage
+        self.length = self.length + 1
+    }
+
+    void* get(Vector* self, int index) {
+        if index < 0 || index >= self.length {
+            printf("Vector: IndexOutOfBounds\n")
+            exit(1)
+        }
+        return self.data[index]
+    }
+
+    // Retorna o ponteiro do item removido (caso precise usar antes de esquecer)
+    void* pop(Vector* self) {
+        if self.length == 0 { return null }
+        
+        self.length = self.length - 1
+        return self.data[self.length]
+    }
+    
+    // Limpa apenas o contador.
+    // NOTA: Isso não libera memória da Arena (Arenas só liberam tudo de uma vez).
+    void clear(Vector* self) {
+        self.length = 0
+        // Se a arena for interna, podemos resetar ela inteira com segurança
+        if self.owns_allocator {
+            self.allocator.reset() 
+        }
+    }
+
+    void destroy(Vector* self) {
+        // Libera a espinha dorsal (Heap padrão)
+        if self.data != null {
+            free(self.data)
+        }
+        
+        // Se somos donos da arena, destruímos ela
+        if self.owns_allocator {
+            self.allocator.destroy()
+        }
+        
+        self.data = null
+        self.length = 0
+        self.capacity = 0
+    }
+}

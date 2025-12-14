@@ -15,3 +15,6 @@ xc-test-*
 *.out
 *.obj
 *.lst
+*.bin
+*.img
+*.ll

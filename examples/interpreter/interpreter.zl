@@ -1,0 +1,275 @@
+import std.libc.io : { printf, exit }
+import std.libc.mem : { malloc, free, memcpy }
+import std.libc.file : { fopen, fclose, ftell, rewind, fread, fseek }
+
+// ARENA
+struct Arena {
+    char* base = null
+    int size = 0
+    int offset = 0
+
+    void create(Arena* self, int size) {
+        self.base = malloc(size)
+        self.size = size
+    }
+
+    void* alloc(Arena* self, int amount) {
+        if self.offset + amount > self.size
+            return null
+        void* ptr = self.base + self.offset
+        self.offset = self.offset + amount
+        return ptr
+    }
+
+    void reset(Arena* self) {
+        self.offset = 0
+    }
+
+    void destroy(Arena* self) {
+        free(self.base)
+        self.base = null
+        self.offset = 0
+        self.size = 0
+    }
+}
+
+// LEXER
+
+enum TokenType {
+    Eof
+    Plus
+    LParen
+    RParen
+    LBrace
+    RBrace
+    Int
+    Identifier
+}
+
+struct Token {
+    TokenType kind = TokenType.Eof
+    string text = null
+    int length = 0
+
+    void print(Token* self) {
+        if self.kind == TokenType.Eof {
+            printf("Token(EOF)\n")
+        } else if self.kind == TokenType.Plus {
+            printf("Token(PLUS, '+')\n")
+        } else if self.kind == TokenType.RParen {
+            printf("Token(RPAREN, ')')\n")
+        } else if self.kind == TokenType.LParen {
+            printf("Token(LPAREN, '(')\n")
+        } else if self.kind == TokenType.RBrace {
+            printf("Token(RBRACE, '}')\n")
+        } else if self.kind == TokenType.LBrace {
+            printf("Token(LBRACE, '{')\n")
+        } else if self.kind == TokenType.Int {
+            printf("Token(INT, '%.*s')\n", self.length, self.text)
+        } else if self.kind == TokenType.Identifier {
+            printf("Token(IDENTIFIER, '%.*s')\n", self.length, self.text)
+        }
+    }
+}
+
+struct Lexer {
+    string source = null
+    int len = 0
+    int pos = 0
+    Token* tokens = null
+    int tokenCount = 0
+    int tokenCapacity = 0
+    Arena* arena = null
+
+    char current(Lexer* self) {
+        if self.pos >= self.len 
+            return '\0'
+        return self.source[self.pos]
+    }
+
+    char peek(Lexer* self, int offset) {
+        int newPos = self.pos + offset
+        if newPos >= self.len 
+            return '\0'
+        return self.source[newPos]
+    }
+
+    bool isAlpha(Lexer* self, char ch) {
+        return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
+    }
+
+    bool isNum(Lexer* self, char ch) {
+        return ch >= '0' && ch <= '9'
+    }
+
+    bool isWhitespace(Lexer* self, char ch) {
+        return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
+    }
+
+    void advance(Lexer* self) {
+        self.pos = self.pos + 1
+    }
+
+    void skipWhitespace(Lexer* self) {
+        while self.isWhitespace(self.current()) {
+            self.advance()
+        }
+    }
+
+    void addToken(Lexer* self, TokenType kind, string text, int length) {
+        if self.tokenCount >= self.tokenCapacity
+            runtime_error("Token capacity exceeded")
+        
+        Token* token = &(self.tokens[self.tokenCount])
+        token.kind = kind
+        token.text = text
+        token.length = length
+        self.tokenCount = self.tokenCount + 1
+    }
+
+    Token* tokenize(Lexer* self) {
+        // Aloca espaço para tokens
+        self.tokenCapacity = 1024
+        self.tokens = (Token*) self.arena.alloc(self.tokenCapacity * 16) // sizeof(Token) ~= 16
+        int start = 0
+        int length = 0
+
+        while self.pos < self.len {
+            self.skipWhitespace()
+            
+            char ch = self.current()
+            
+            if ch == '\0' 
+                break
+            
+            // Números
+            if self.isNum(ch) {
+                start = self.pos
+                while self.isNum(self.current()) {
+                    self.advance()
+                }
+                length = self.pos - start
+                self.addToken(TokenType.Int, self.source + start, length)
+                continue
+            }
+            
+            // Identificadores
+            if self.isAlpha(ch) {
+                start = self.pos
+                while self.isAlpha(self.current()) || self.isNum(self.current()) {
+                    self.advance()
+                }
+                length = self.pos - start
+                self.addToken(TokenType.Identifier, self.source + start, length)
+                continue
+            }
+            
+            if ch == '+' {
+                self.addToken(TokenType.Plus, self.source + self.pos, 1)
+                self.advance() continue
+            } else if ch == '(' {
+                self.addToken(TokenType.LParen, self.source + self.pos, 1)
+                self.advance() continue
+            } else if ch == ')' {
+                self.addToken(TokenType.RParen, self.source + self.pos, 1)
+                self.advance() continue
+            } else if ch == '{' {
+                self.addToken(TokenType.LBrace, self.source + self.pos, 1)
+                self.advance() continue
+            } else if ch == '}' {
+                self.addToken(TokenType.RBrace, self.source + self.pos, 1)
+                self.advance() continue
+            }
+            
+            // Caractere desconhecido - pula
+            self.advance()
+        }
+        
+        // Token EOF
+        self.addToken(TokenType.Eof, null, 0)
+        
+        return self.tokens
+    }
+
+    void printTokens(Lexer* self) {
+        for int i = 0; i < self.tokenCount; i = i + 1 {
+            &(self.tokens[i]).print()
+        }
+    }
+}
+
+// PARSER
+
+// RUNTIME
+
+// MAIN
+
+void runtime_error(string msg) {
+    printf("Runtime Error: %s\n", msg)
+    exit(1)
+}
+
+bool fileExist(string filename) {
+    void* f = fopen(filename, "r")
+    if f == null
+        return false
+    fclose(f)
+    return true
+}
+
+char* readFile(string filename, Arena* arena) {
+    int SEEK_END = 2
+    void* f = fopen(filename, "rb")
+
+    if f == null
+        runtime_error("Falha ao abrir arquivo na leitura.")
+
+    fseek(f, 0, SEEK_END)
+    int size = ftell(f)
+    rewind(f)
+
+    char* buffer = (char*) arena.alloc(size + 1)
+
+    if buffer == null {
+        fclose(f)
+        runtime_error("Buffer não foi alocado.")
+    }
+
+    fread(buffer, 1, size, f)
+    buffer[size] = '\0'  // Null terminator
+    fclose(f)
+
+    return buffer
+}
+
+long strlen(string str) { 
+    for long i = 0L ; str[i] != '\0' ; i = i + 1L {} 
+    return i 
+}
+
+int main(int argc, string* argv) {
+    if (argc != 2)
+        runtime_error("É esperado um unico arquivo como argumento.")
+
+    string filename = argv[1]
+
+    if fileExist(filename) == false
+        runtime_error("O arquivo não existe.")
+
+    // inicializa o arena alocator
+    Arena arena = Arena{}
+    arena.create(1024 * 1024) // 1MB
+    defer arena.destroy()
+
+    string source = readFile(filename, &arena)
+    
+    Lexer lexer = Lexer{}
+    lexer.source = source
+    lexer.len = (int) strlen(source)
+    lexer.arena = &arena
+    
+    lexer.tokenize()
+    lexer.printTokens()
+
+    return 0
+}

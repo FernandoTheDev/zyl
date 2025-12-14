@@ -1,0 +1,16 @@
+import std.libc.io
+import std.string
+import std.arena
+
+int main() {
+    Arena arena = Arena{}
+    arena.create(1024 * 1024)
+    defer arena.destroy()
+
+    String name = String{"Fernando"}
+    defer name.destroy()
+
+    name += " Dev"
+    printf("%s\n", name.str)
+    return 0
+}

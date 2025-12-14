@@ -1,0 +1,45 @@
+import std.libc.io : { printf }
+
+struct Test1 {
+    //
+    int id;
+    long age = 69L
+}
+
+union Test2 {
+    //
+    int i;
+    long l;
+}
+
+struct Test3 @nomangle {
+    //
+    int id;
+    long age = 69L
+}
+
+union Test4 @nomangle {
+    //
+    int i;
+    long l;
+}
+
+int sum(int x, int y) { 
+    return x + y 
+}
+
+double sum(double x, double y) { 
+    return x + y 
+}
+
+int main() {
+    Test1 t1 = Test1{67}
+    Test2 t2;
+    t2.i = 17
+    Test3 t3 = Test3{67}
+    Test4 t4;
+    t4.i = 17
+
+    printf("%d %f\n", sum(1, 2), sum(1D, 2D))
+    return 0;
+}

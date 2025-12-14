@@ -1,0 +1,253 @@
+// GTK4 Bindings for ZYL Programming Language
+
+// =============================================================================
+// TYPES
+// =============================================================================
+
+type GtkApplication = void*
+type GtkWindow = void*
+type GtkWidget = void*
+type GtkButton = void*
+type GtkLabel = void*
+type GtkEntry = void*
+type GtkBox = void*
+type GtkGrid = void*
+type GtkTextView = void*
+type GtkTextBuffer = void*
+type GtkScrolledWindow = void*
+type GtkNotebook = void*
+type GtkFrame = void*
+type GtkMenuBar = void*
+type GtkMenuItem = void*
+type GtkMenu = void*
+type GtkFileChooserDialog = void*
+type GtkMessageDialog = void*
+type GtkDialog = void*
+
+type GApplication = void*
+type GCallback = void*
+type gpointer = void*
+type gboolean = int
+type gint = int
+type guint = int
+type gchar = char
+type gsize = long
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+// GtkOrientation
+int GTK_ORIENTATION_HORIZONTAL = 0
+int GTK_ORIENTATION_VERTICAL = 1
+
+// GtkAlign
+int GTK_ALIGN_FILL = 0
+int GTK_ALIGN_START = 1
+int GTK_ALIGN_END = 2
+int GTK_ALIGN_CENTER = 3
+int GTK_ALIGN_BASELINE = 4
+
+// GtkMessageType
+int GTK_MESSAGE_INFO = 0
+int GTK_MESSAGE_WARNING = 1
+int GTK_MESSAGE_QUESTION = 2
+int GTK_MESSAGE_ERROR = 3
+
+// GtkButtonsType
+int GTK_BUTTONS_NONE = 0
+int GTK_BUTTONS_OK = 1
+int GTK_BUTTONS_CLOSE = 2
+int GTK_BUTTONS_CANCEL = 3
+int GTK_BUTTONS_YES_NO = 4
+int GTK_BUTTONS_OK_CANCEL = 5
+
+// GtkResponseType
+// int GTK_RESPONSE_NONE = -1
+// int GTK_RESPONSE_REJECT = -2
+// int GTK_RESPONSE_ACCEPT = -3
+// int GTK_RESPONSE_DELETE_EVENT = -4
+// int GTK_RESPONSE_OK = -5
+// int GTK_RESPONSE_CANCEL = -6
+// int GTK_RESPONSE_CLOSE = -7
+// int GTK_RESPONSE_YES = -8
+// int GTK_RESPONSE_NO = -9
+// int GTK_RESPONSE_APPLY = -10
+
+// GtkWindowPosition
+int GTK_WIN_POS_NONE = 0
+int GTK_WIN_POS_CENTER = 1
+int GTK_WIN_POS_MOUSE = 2
+
+// GApplicationFlags
+int G_APPLICATION_FLAGS_NONE = 0
+int G_APPLICATION_DEFAULT_FLAGS = 0
+
+// =============================================================================
+// APPLICATION
+// =============================================================================
+
+GtkApplication* gtk_application_new(string application_id, int flags);
+int g_application_run(GApplication* app, int argc, string* argv);
+void g_application_quit(GApplication* app);
+
+// =============================================================================
+// SIGNALS
+// =============================================================================
+
+long g_signal_connect_data(
+    gpointer instance,
+    string detailed_signal,
+    (void**, void*): void* c_handler,
+    gpointer data,
+    void* destroy_data,
+    int connect_flags
+);
+
+// =============================================================================
+// WINDOW
+// =============================================================================
+
+GtkWidget* gtk_application_window_new(GtkApplication* app);
+void gtk_window_set_title(GtkWindow* window, string title);
+void gtk_window_set_default_size(GtkWindow* window, int width, int height);
+void gtk_window_present(GtkWindow* window);
+void gtk_window_close(GtkWindow* window);
+void gtk_window_set_child(GtkWindow* window, GtkWidget* child);
+GtkWidget* gtk_window_get_child(GtkWindow* window);
+void gtk_window_set_resizable(GtkWindow* window, gboolean resizable);
+
+// =============================================================================
+// BUTTON
+// =============================================================================
+
+GtkWidget* gtk_button_new();
+GtkWidget* gtk_button_new_with_label(string label);
+GtkWidget* gtk_button_new_with_mnemonic(string label);
+void gtk_button_set_label(GtkButton* button, string label);
+string gtk_button_get_label(GtkButton* button);
+
+// =============================================================================
+// LABEL
+// =============================================================================
+
+GtkWidget* gtk_label_new(string str);
+void gtk_label_set_text(GtkLabel* label, string str);
+string gtk_label_get_text(GtkLabel* label);
+void gtk_label_set_markup(GtkLabel* label, string str);
+void gtk_label_set_selectable(GtkLabel* label, gboolean setting);
+
+// =============================================================================
+// ENTRY (Text Input)
+// =============================================================================
+
+GtkWidget* gtk_entry_new();
+void gtk_entry_set_text(GtkEntry* entry, string text);
+string gtk_entry_get_text(GtkEntry* entry);
+void gtk_entry_set_placeholder_text(GtkEntry* entry, string text);
+void gtk_entry_set_visibility(GtkEntry* entry, gboolean visible);
+void gtk_entry_set_max_length(GtkEntry* entry, int max);
+
+// =============================================================================
+// BOX (Container)
+// =============================================================================
+
+GtkWidget* gtk_box_new(int orientation, int spacing);
+void gtk_box_append(GtkBox* box, GtkWidget* child);
+void gtk_box_prepend(GtkBox* box, GtkWidget* child);
+void gtk_box_remove(GtkBox* box, GtkWidget* child);
+void gtk_box_set_spacing(GtkBox* box, int spacing);
+void gtk_box_set_homogeneous(GtkBox* box, gboolean homogeneous);
+
+// =============================================================================
+// GRID (2D Layout)
+// =============================================================================
+
+GtkWidget* gtk_grid_new();
+void gtk_grid_attach(GtkGrid* grid, GtkWidget* child, int left, int top, int width, int height);
+void gtk_grid_set_row_spacing(GtkGrid* grid, guint spacing);
+void gtk_grid_set_column_spacing(GtkGrid* grid, guint spacing);
+void gtk_grid_set_row_homogeneous(GtkGrid* grid, gboolean homogeneous);
+void gtk_grid_set_column_homogeneous(GtkGrid* grid, gboolean homogeneous);
+
+// =============================================================================
+// TEXT VIEW (Multi-line text)
+// =============================================================================
+
+GtkWidget* gtk_text_view_new();
+GtkTextBuffer* gtk_text_view_get_buffer(GtkTextView* text_view);
+void gtk_text_view_set_editable(GtkTextView* text_view, gboolean setting);
+void gtk_text_view_set_wrap_mode(GtkTextView* text_view, int wrap_mode);
+
+// Text Buffer
+void gtk_text_buffer_set_text(GtkTextBuffer* buffer, string text, int len);
+string gtk_text_buffer_get_text(GtkTextBuffer* buffer, void* start, void* end, gboolean include_hidden_chars);
+
+// =============================================================================
+// SCROLLED WINDOW
+// =============================================================================
+
+GtkWidget* gtk_scrolled_window_new();
+void gtk_scrolled_window_set_child(GtkScrolledWindow* scrolled_window, GtkWidget* child);
+void gtk_scrolled_window_set_policy(GtkScrolledWindow* scrolled_window, int hscrollbar_policy, int vscrollbar_policy);
+
+// =============================================================================
+// FRAME
+// =============================================================================
+
+GtkWidget* gtk_frame_new(string label);
+void gtk_frame_set_label(GtkFrame* frame, string label);
+void gtk_frame_set_child(GtkFrame* frame, GtkWidget* child);
+
+// =============================================================================
+// NOTEBOOK (Tabs)
+// =============================================================================
+
+GtkWidget* gtk_notebook_new();
+int gtk_notebook_append_page(GtkNotebook* notebook, GtkWidget* child, GtkWidget* tab_label);
+void gtk_notebook_set_current_page(GtkNotebook* notebook, int page_num);
+int gtk_notebook_get_current_page(GtkNotebook* notebook);
+
+// =============================================================================
+// DIALOGS
+// =============================================================================
+
+GtkWidget* gtk_message_dialog_new(
+    GtkWindow* parent,
+    int flags,
+    int t,
+    int buttons,
+    string message_format
+);
+
+int gtk_dialog_run(GtkDialog* dialog);
+void gtk_window_destroy(GtkWindow* window);
+
+// =============================================================================
+// WIDGET (Generic)
+// =============================================================================
+
+void gtk_widget_show(GtkWidget* widget);
+void gtk_widget_hide(GtkWidget* widget);
+void gtk_widget_set_sensitive(GtkWidget* widget, gboolean sensitive);
+void gtk_widget_set_visible(GtkWidget* widget, gboolean visible);
+void gtk_widget_set_size_request(GtkWidget* widget, int width, int height);
+void gtk_widget_set_margin_start(GtkWidget* widget, int margin);
+void gtk_widget_set_margin_end(GtkWidget* widget, int margin);
+void gtk_widget_set_margin_top(GtkWidget* widget, int margin);
+void gtk_widget_set_margin_bottom(GtkWidget* widget, int margin);
+void gtk_widget_set_halign(GtkWidget* widget, int align);
+void gtk_widget_set_valign(GtkWidget* widget, int align);
+void gtk_widget_set_hexpand(GtkWidget* widget, gboolean expand);
+void gtk_widget_set_vexpand(GtkWidget* widget, gboolean expand);
+
+type GtkCssProvider = void*
+
+GtkCssProvider* gtk_css_provider_new();
+void gtk_css_provider_load_from_data(GtkCssProvider* css_provider, string data, long length);
+void gtk_css_provider_load_from_path(GtkCssProvider* css_provider, string path);
+void gtk_style_context_add_provider_for_display(void* display, GtkCssProvider* provider, guint priority);
+void* gdk_display_get_default();
+
+int GTK_STYLE_PROVIDER_PRIORITY_USER = 800
+int GTK_STYLE_PROVIDER_PRIORITY_APPLICATION = 600

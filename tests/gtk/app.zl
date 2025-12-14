@@ -1,0 +1,86 @@
+// zyl app.zl -O 3 --of app --clang "`pkg-config --cflags --libs gtk4`"
+import std.libc.io : { printf, sprintf }
+import std.libc.mem : { malloc, free }
+import gtk4
+
+struct CounterApp {
+    int count = 0
+    GtkLabel* label = null
+
+    void* update_label(CounterApp* app) @nomangle {
+        char* buffer = (char*) malloc((sizeof string) * 8);
+        sprintf(buffer, "Count: %d", app.count)
+        gtk_label_set_text(app.label, buffer)
+        free(buffer)
+        return null
+    }
+}
+
+void* on_increment(GtkButton* button, CounterApp* app) @nomangle {
+    app.count = app.count + 1
+    app.update_label()
+    return null
+}
+
+void* on_decrement(GtkButton* button, CounterApp* app) @nomangle {
+    app.count = app.count - 1
+    app.update_label()
+    return null
+}
+
+void* on_reset(GtkButton* button, CounterApp* app) @nomangle {
+    app.count = 0
+    app.update_label()
+    return null
+}
+
+void* on_activate(GtkApplication* gtk_app, CounterApp* app) @nomangle {
+    // Window
+    GtkWidget* window = gtk_application_window_new(gtk_app)
+    gtk_window_set_title(window, "Counter App - ZYL")
+    gtk_window_set_default_size(window, 300, 200)
+    
+    // Vertical Box
+    GtkWidget* vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10)
+    gtk_widget_set_margin_start(vbox, 20)
+    gtk_widget_set_margin_end(vbox, 20)
+    gtk_widget_set_margin_top(vbox, 20)
+    gtk_widget_set_margin_bottom(vbox, 20)
+    
+    // Label
+    app.label = (void**) gtk_label_new("Count: 0")
+    gtk_box_append(vbox, (void*) app.label)
+    
+    // Horizontal box for buttons
+    GtkWidget* hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10)
+    gtk_box_set_homogeneous(hbox, 1)
+    
+    GtkWidget* btn_dec = gtk_button_new_with_label("-")
+    GtkWidget* btn_reset = gtk_button_new_with_label("Reset")
+    GtkWidget* btn_inc = gtk_button_new_with_label("+")
+    
+    g_signal_connect_data(btn_dec, "clicked", on_decrement, app, null, 0)
+    g_signal_connect_data(btn_reset, "clicked", on_reset, app, null, 0)
+    g_signal_connect_data(btn_inc, "clicked", on_increment, app, null, 0)
+    
+    gtk_box_append(hbox, btn_dec)
+    gtk_box_append(hbox, btn_reset)
+    gtk_box_append(hbox, btn_inc)
+    
+    gtk_box_append(vbox, hbox)
+    
+    gtk_window_set_child(window, vbox)
+    gtk_window_present(window)
+
+    return null
+}
+
+int main(int argc, string* argv) {
+    CounterApp app = CounterApp{}
+    
+    GtkApplication* gtk_app = gtk_application_new("com.zyl.counter", G_APPLICATION_DEFAULT_FLAGS)
+    g_signal_connect_data(gtk_app, "activate", on_activate, &app, null, 0)
+    int status = g_application_run(gtk_app, argc, argv)
+    
+    return status
+}

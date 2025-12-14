@@ -8,14 +8,6 @@ mixin template ParseType()
         Loc start = this.peek().loc;
         TypeExpr type = this.parsePrimaryType();
 
-        if (this.check(TokenKind.BitOr))
-        {
-            TypeExpr[] types = [type];
-            while (this.match([TokenKind.BitOr]))
-                types ~= this.parsePrimaryType();
-            return new UnionTypeExpr(types, this.getLoc(start, this.previous().loc));
-        }
-
         if (this.check(TokenKind.LBracket))
             return this.parseArrayType(type);
 

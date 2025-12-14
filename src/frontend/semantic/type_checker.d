@@ -85,7 +85,7 @@ private:
             return new PrimitiveType(BaseType.Double);
 
         if (auto lit = cast(StringLit) expr)
-            return new PrimitiveType(BaseType.String);
+            return new PointerType(new PrimitiveType(BaseType.Char));
 
         if (auto lit = cast(BoolLit) expr)
             return new PrimitiveType(BaseType.Bool);
@@ -103,7 +103,7 @@ private:
             return checkIdentifier(ident);
 
         if (auto binary = cast(BinaryExpr) expr)
-            return checkBinaryExpr(binary);
+            return checkBinaryExpr(binary, expr);
         
         if (auto unary = cast(UnaryExpr) expr)
             return checkUnaryExpr(unary);
@@ -136,6 +136,55 @@ private:
         return new PrimitiveType(BaseType.Any);
     }
 
+    public void makeImplicitCast(ref Node node, Type targetType)
+    {
+        Node cast_ = implicitCast(node, targetType);
+        if (cast_ != node)
+            node = cast_;
+    }
+
+    public Node implicitCast(Node node, Type targetType)
+    {
+        Type sourceType = node.resolvedType;
+
+        if (targetType == sourceType)
+            return node;
+
+        if (!targetType.isCompatibleWith(sourceType, false))
+            return node;
+        
+        if (isNumeric(sourceType) && isNumeric(targetType))
+        {
+            auto castNode = new CastExpr(null, node, node.loc);
+            castNode.resolvedType = targetType; 
+            return castNode;
+        }
+
+        if (targetType.toStr() == "void*" && sourceType.isPointer()) 
+        {
+             auto castNode = new CastExpr(null, node, node.loc);
+             castNode.resolvedType = targetType;
+             return castNode;
+        }
+
+        if (sourceType.toStr() == "null" && targetType.isPointer())
+             return node;
+
+        return node;
+    }
+
+    int getRank(Type t) 
+    {
+        if (PrimitiveType p = cast(PrimitiveType) t)
+            return TYPE_HIERARCHY.get(p.baseType, 0);
+        return 0;
+    }
+
+    bool isNumeric(Type t)
+    {
+        return getRank(t) > 0;
+    }
+
     Type checkStructLit(StructLit lit)
     {
         // Busca a struct
@@ -148,6 +197,8 @@ private:
         }
         
         StructType structType = structSym.structType;
+        lit.mangledName = structSym.declaration.mangledName;
+        structType.mangledName = lit.mangledName;
         lit.resolvedType = structType;
         
         // 1. Se for chamada de construtor: User("John")
@@ -205,14 +256,16 @@ private:
             }
             
             // Valida cada campo na ordem
-            foreach (i, init; lit.fieldInits)
+            foreach (i, ref init; lit.fieldInits)
             {
                 if (i >= structType.fields.length)
                     break;
                 
                 StructField field = structType.fields[i];
                 Type valueType = checkExpression(init.value);
-                
+                makeImplicitCast(init.value, field.resolvedType);
+                valueType = init.value.resolvedType;
+
                 if (!field.resolvedType.isCompatibleWith(valueType))
                 {
                     reportError(
@@ -293,6 +346,28 @@ private:
                 );
         }
 
+        void unionError(UnionType un, string member, Loc loc)
+        {
+            reportError(
+                    format("Union '%s' does not have field '%s'",
+                           un.name, member),
+                    loc,
+                    [Suggestion(format("Available fields: %s", 
+                        getAvailableFields(un)))]
+                );
+        }
+
+        void enumError(EnumType enm, string member, Loc loc)
+        {
+            reportError(
+                    format("Enum '%s' does not have field '%s'",
+                           enm.name, member),
+                    loc,
+                    [Suggestion(format("Available fields: %s", 
+                        getAvailableFields(enm)))]
+                );
+        }
+
         Type targetType = checkExpression(expr.target);
 
         // 1. Acesso a campo de struct
@@ -329,6 +404,36 @@ private:
             }
         }
 
+        if (UnionType un = cast(UnionType) targetType)
+        {
+            // Verifica se o campo existe
+            if (!un.hasField(expr.member))
+            {
+                unionError(un, expr.member, expr.loc);
+                return new PrimitiveType(BaseType.Any);
+            }
+
+            // Retorna o tipo do campo
+            Type fieldType = un.getFieldType(expr.member);
+            expr.resolvedType = fieldType;
+            return fieldType;
+        }
+
+        if (EnumType enm = cast(EnumType) targetType)
+        {
+            // Verifica se o campo existe
+            if (!enm.hasMember(expr.member))
+            {
+                enumError(enm, expr.member, expr.loc);
+                return new PrimitiveType(BaseType.Any);
+            }
+
+            // Retorna o tipo do campo
+            Type fieldType = new PrimitiveType(BaseType.Int);
+            expr.resolvedType = fieldType;
+            return fieldType;
+        }
+
         reportError(
             format("Type '%s' does not have members", targetType.toStr()),
             expr.target.loc,
@@ -343,6 +448,22 @@ private:
             return "(none)";
 
         return structType.fields.map!(f => f.name).join(", ");
+    }
+
+    string getAvailableFields(UnionType un)
+    {
+        if (un.fields.length == 0)
+            return "(none)";
+
+        return un.fields.map!(f => f.name).join(", ");
+    }    
+
+    string getAvailableFields(EnumType enm)
+    {
+        if (enm.members.length == 0)
+            return "(none)";
+
+        return enm.members.byKey.map!(f => f).join(", ");
     }
 
     Type checkSizeof(SizeOfExpr sizeof)
@@ -381,7 +502,7 @@ private:
         if (right.toStr() == left.toStr())
             return left;
 
-        return new UnionType([left, right]);
+        return left;
     }
 
     Type checkIdentifier(Identifier ident)
@@ -416,31 +537,129 @@ private:
     bool isInteger(Type t)
     {
         if (PrimitiveType primi = cast(PrimitiveType) t)
-            return primi.baseType == BaseType.Int;
+            return primi.baseType == BaseType.Int || primi.baseType == BaseType.Long;
         return false;
     }
 
-    Type checkBinaryExpr(BinaryExpr expr)
+    Type checkBinaryExpr(BinaryExpr expr, Node n)
     {
         Type leftType = checkExpression(expr.left);
         expr.left.resolvedType = leftType;
         Type rightType = checkExpression(expr.right);
         expr.right.resolvedType = rightType;
-
+        PointerType ptr;
+        
         string op = expr.op;
 
         // Caso 1: Ponteiro + Inteiro (ex: walker + 1)
-        if (op == "+" && expr.left.resolvedType.isPointer() && isInteger(expr.right.resolvedType))
+        if (op == "+" && leftType.isPointer() && isInteger(rightType))
         {
-            expr.resolvedType = expr.left.resolvedType; // O resultado continua sendo User*
-            return expr.resolvedType;
+            ptr = cast(PointerType) leftType;
+            if (ptr.isCompatibleWith(rightType, false))
+            {
+                expr.resolvedType = leftType; // O resultado continua sendo User*
+                return expr.resolvedType;
+            }
         }
 
         // Caso 2: Ponteiro - Inteiro (ex: walker - 2)
-        if (op == "-" && expr.left.resolvedType.isPointer() && isInteger(expr.right.resolvedType))
+        if (op == "-" && leftType.isPointer() && isInteger(rightType))
         {
-            expr.resolvedType = expr.left.resolvedType; // O resultado continua sendo User*
-            return expr.resolvedType;
+            ptr = cast(PointerType) leftType;
+            if (ptr.isCompatibleWith(rightType, false))
+            {
+                expr.resolvedType = leftType; // O resultado continua sendo User*
+                return expr.resolvedType;
+            }
+        }
+
+        string getOpName(string op, bool isRight)
+        {
+            if (isRight)
+                switch (op)
+                    {
+                    case "+":  return "opAddRight";
+                    case "-":  return "opSubRight";
+                    case "*":  return "opMulRight";
+                    case "/":  return "opDivRight";
+                    case "%":  return "opModRight";
+                    case "==": return "opEqualsRight";
+                    case "!=": return "opNotEqualsRight";
+                    case "<":  return "opLessRight";
+                    case ">":  return "opGreaterRight";
+                    case "<=": return "opLessEqualRight";
+                    case ">=": return "opGreaterEqualRight";
+                    default: return null; 
+                }
+            else
+                switch (op)
+                {
+                    case "+":  return "opAdd";
+                    case "-":  return "opSub";
+                    case "*":  return "opMul";
+                    case "/":  return "opDiv";
+                    case "%":  return "opMod";
+                    case "==": return "opEquals";
+                    case "!=": return "opNotEquals";
+                    case "<":  return "opLess";
+                    case ">":  return "opGreater";
+                    case "<=": return "opLessEqual";
+                    case ">=": return "opGreaterEqual";
+                    default: return null;
+                }
+        }
+
+        Type tryResolveOperator(StructType st, string op, Type inputType, BinaryExpr expr, bool isRight)
+        {
+            string methodName = getOpName(op, isRight);
+            StructMethod* method = null;
+
+            if (methodName !is null && st.hasMethod(methodName))
+            {
+                method = st.findMethod(methodName, [inputType]);
+                if (method !is null)
+                {
+                    expr.mangledName = method.funcDecl.mangledName;
+                    expr.resolvedType = method.funcDecl.resolvedType;
+                    if (isRight) expr.isRight = true; // Seta flag se necessário
+                    return expr.resolvedType;
+                }
+            }
+        
+            if (st.hasMethod("opBinary"))
+            {
+                method = st.findMethod("opBinary", [new PointerType(new PrimitiveType(BaseType.Char)), inputType]);
+                if (method !is null)
+                {
+                    expr.mangledName = method.funcDecl.mangledName;
+                    expr.resolvedType = method.funcDecl.resolvedType;
+                    expr.usesOpBinary = true;
+                    if (isRight) expr.isRight = true;
+                    return expr.resolvedType;
+                }
+            }
+
+            return null;
+        }
+
+        if (auto st = cast(StructType) leftType)
+        {
+            Type result = tryResolveOperator(st, op, rightType, expr, false); // isRight = false
+            if (result !is null) return result;
+
+            reportError(format("Struct '%s' does not implement operator '%s' for type '%s'", 
+                st.name, op, rightType.toStr()), expr.loc);
+            return new PrimitiveType(BaseType.Any);
+        }
+
+        if (auto st = cast(StructType) rightType)
+        {
+            Type result = tryResolveOperator(st, op, leftType, expr, true); // isRight = true
+            if (result !is null) return result;
+
+            reportError(format("Struct '%s' does not implement operator '%s' for type '%s'", 
+                st.name, op, leftType.toStr()), expr.loc);
+            return new PrimitiveType(BaseType.Any);
         }
 
         // Operadores aritméticos: +, -, *, /, %
@@ -454,9 +673,9 @@ private:
 
             // Type promotion
             Type t = leftType.getPromotedType(rightType);
-            expr.left.resolvedType = t;
-            expr.right.resolvedType = t;
             expr.resolvedType = t;
+            makeImplicitCast(expr.right, expr.resolvedType);
+            makeImplicitCast(expr.left, expr.resolvedType);
             return t;
         }
 
@@ -560,7 +779,7 @@ private:
     {
         Type targetType = checkExpression(expr.left);
         Type valueType = checkExpression(expr.right);
-
+            
         // Verifica se pode atribuir
         if (auto ident = cast(Identifier) expr.left)
         {
@@ -582,7 +801,7 @@ private:
         // Checa como operação binária
         string binOp = expr.op[0 .. $ - 1]; // remove '='
         auto binaryType = checkBinaryExpr(
-            new BinaryExpr(expr.left, expr.right, binOp, expr.loc)
+            new BinaryExpr(expr.left, expr.right, binOp, expr.loc), null
         );
 
         if (!binaryType.isCompatibleWith(targetType))
@@ -594,12 +813,10 @@ private:
     Type checkCallExpr(CallExpr expr)
     {
         // Caso 1: Chamada de Método (obj.metodo())
-        if (auto mem = cast(MemberExpr) expr.id) // Assumindo que você mudou CallExpr para ter 'callee' genérico
-        {                            // Se CallExpr ainda tem 'id', você precisará adaptar o Parser para aceitar MemberExpr
-            
-            // 1. Resolve o objeto dono (ex: 'u' em 'u.print')
+        if (MemberExpr mem = cast(MemberExpr) expr.id)
+        {                            
             Type targetType = checkExpression(mem.target);
-            
+
             // Se for ponteiro, pega a struct apontada
             StructType structType;
             if (auto pt = cast(PointerType) targetType)
@@ -612,20 +829,18 @@ private:
                 return new PrimitiveType(BaseType.Any);
             }
 
-            // 2. Busca o método na struct
-            auto method = structType.getMethod(mem.member);
+            Type[] argTypes;
+            foreach (arg; expr.args)
+                argTypes ~= checkExpression(arg);
+            
+            StructMethod* method = structType.findMethod(mem.member, argTypes);
             if (method is null) {
-                reportError(format("The method '%s' does not exist in the struct '%s'.", mem.member, structType.name), 
-                    mem.loc);
+                reportError(format("The method '%s' does not exist in the struct '%s' with the given signature.", 
+                    mem.member, structType.name), mem.loc);
                 return new PrimitiveType(BaseType.Any);
             }
 
-            // 3. Valida os argumentos
-            // O método espera (this, arg1, arg2...)
-            // A chamada tem (arg1, arg2...)
-            // Precisamos validar se 'targetType' bate com o primeiro parametro (this)
-            
-            auto funcDecl = method.funcDecl;
+            FuncDecl funcDecl = method.funcDecl;
             size_t expectedArgs = funcDecl.args.length;
             size_t providedArgs = expr.args.length + 1; // +1 do 'this' implícito
 
@@ -633,7 +848,7 @@ private:
                  reportError(format("The method expects %d arguments (including self), but received %d.", expectedArgs, 
                     providedArgs), expr.loc);
 
-            // Valida o 'this' (primeiro parametro)
+            // Valida o 'self' (primeiro parametro)
             Type thisParamType = funcDecl.args[0].resolvedType;
             // Determina o tipo que será passado
             Type passedType = targetType;
@@ -645,25 +860,25 @@ private:
                  reportError(format("Error in 'self': Method expects '%s', but the object is '%s'", 
                     thisParamType.toStr(), targetType.toStr()), mem.loc);
 
-            // Valida o resto dos argumentos
-            foreach (i, arg; expr.args) {
+            // Valida o resto dos argumentos (já foram coletados em argTypes)
+            foreach (i, argType; argTypes) {
                 if (i + 1 >= funcDecl.args.length) {
                     // Não podemos checar 'funcDecl.args[$-1] is null' se for struct.
                     // Checamos se o NOME do último argumento é "..." ou se o TIPO dele é null.
                     bool isVariadic = false;
-                    
+
                     if (funcDecl.args.length > 0) {
                         auto lastArg = funcDecl.args[$-1];
                         // Verifica se é variadic pelo nome "..." ou se o resolvedType é nulo
                         if (lastArg.name == "..." || lastArg.resolvedType is null)
                             isVariadic = true;
                     }
-                    
+
                     if (!isVariadic) {
                         reportError(
                         format("Too many arguments for the '%s' method. Expected %d, but received %d (including self).", 
                             method.funcDecl.name, funcDecl.args.length, expr.args.length + 1), 
-                            arg.loc
+                            expr.args[i].loc
                         );
                         break;
                     } else
@@ -673,19 +888,27 @@ private:
 
                 // offset +1 nos parametros da função (pula o this)
                 Type paramType = funcDecl.args[i+1].resolvedType;
-                Type argType = checkExpression(arg);
-                
-                if (!paramType.isCompatibleWith(argType))
+                bool result = paramType.isPointer() ? (cast(PointerType)paramType).isCompatibleWith(argType, true)
+                     : paramType.isCompatibleWith(argType);
+
+                // writeln("CALL: ", funcDecl.name, " -> ", paramType.toStr(), " | ", argType.toStr());
+
+                if (!result)
                      reportError(
                         format("Incompatible argument #%d: expected '%s', received '%s'", 
                         i + 1, paramType.toStr(), argType.toStr()), 
-                        arg.loc
+                        expr.args[i].loc
                     );
             }
 
             expr.resolvedType = funcDecl.resolvedType;
+            expr.mangledName = funcDecl.mangledName;
             return funcDecl.resolvedType;
         }
+
+        Type[] argTypes;
+        foreach (arg; expr.args)
+            argTypes ~= checkExpression(arg);
 
         FunctionSymbol funcSym = null;
         Symbol sym = null;
@@ -702,7 +925,8 @@ private:
         if (ident !is null)
         {
             string id = ident.value.get!string;
-            funcSym = ctx.lookupFunction(id);
+            funcSym = ctx.findFunction(id, argTypes, null);
+
             if (funcSym is null)
             {
                 sym = ctx.lookup(id);
@@ -715,7 +939,8 @@ private:
                         isRef = true;
                     }
                 }
-            }
+            } else
+                expr.mangledName = funcSym.declaration.mangledName;
         }
 
         if (funcSym is null)
@@ -729,13 +954,11 @@ private:
         size_t minArgs = funcSym.paramTypes.length;
 
         foreach (i, param; funcSym.paramTypes)
-        {
             if (param is null) {
                 hasVariadic = true;
                 minArgs = i; // Argumentos obrigatórios antes do variádico
                 break;
             }
-        }
 
         // Verifica número mínimo de argumentos
         if (hasVariadic)
@@ -759,27 +982,27 @@ private:
         }
 
         expr.isVarArg = hasVariadic;
-        expr.isVarArgAt = funcSym.declaration.isVarArgAt;
+        if (funcSym.declaration !is null)
+            expr.isVarArgAt = funcSym.declaration.isVarArgAt;
         expr.isExternalCall = funcSym.isExternal;
 
         // Verifica tipo dos argumentos até encontrar variádico
-        foreach (i, arg; expr.args)
+        // Agora usa argTypes ao invés de chamar checkExpression novamente
+        foreach (i, argType; argTypes)
         {
-            Type argType = checkExpression(arg);
-
             // Só checa tipos dos argumentos antes do variádico
             if (i < minArgs)
             {
                 Type paramType = funcSym.paramTypes[i];
-
                 if (!paramType.isCompatibleWith(argType))
                     reportError(format("Argument %d: expected '%s', got '%s'.",
-                            i + 1, paramType.toStr(), argType.toStr()), arg.loc);
+                            i + 1, paramType.toStr(), argType.toStr()), expr.args[i].loc);
             }
             // Argumentos depois do variádico: aceita qualquer tipo
         }
 
-        if (isRef) {
+        if (isRef)
+        {
             expr.resolvedType = type;
             return type;
         }

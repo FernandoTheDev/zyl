@@ -1,8 +1,30 @@
+import std.libc.io : { printf }
+
 union Value {
     string str;
     int    i32;
 }
 
+enum Colors {
+    Red
+    Blue
+}
+
+void test() {
+    printf("Defer.\n")
+}
+
 int main() {
+    defer test()
+    int c = Colors.Red
+    Value v;
+    v.i32 = 69
+
+    if c == Colors.Red {
+        printf("c == Colors.Red\n")
+        printf("%d\n", v.i32)
+        return 1
+    }
+
     return 0
 }

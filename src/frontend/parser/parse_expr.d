@@ -180,164 +180,157 @@ mixin template ParseExpr()
         return new UnaryExpr(operand, type, ope, this.getLoc(start, operand.loc));
     }
 
-    // Identifier parseIdentifierExpr(Token name)
-    // {
-    //     return new Identifier(name.value.get!string, name.loc);
-    // }
-
     Node parseIdentifierExpr(Token name)
     {
-    string id = name.value.get!string;
-    
-    // Verifica se é uma struct seguida de { ou (
-    if (registry.typeExists(id))
-    {
-        // User(...) - chamada de construtor
-        if (this.check(TokenKind.LParen))
-            return this.parseStructLit(id, name.loc, true);
-        
-        // User{...} - inicialização literal
-        if (this.check(TokenKind.LBrace))
-            return this.parseStructLit(id, name.loc, false);
-    }
-    
-    return new Identifier(id, name.loc);
-}
+        string id = name.value.get!string;
 
-StructLit parseStructLit(string structName, Loc start, bool isConstructorCall)
-{
-    StructFieldInit[] fieldInits;
-    bool isPositional = true;
-    
-    if (isConstructorCall)
-    {
-        // User("John", 25) - construtor
-        this.advance(); // consome '('
-        
-        if (!this.check(TokenKind.RParen))
+        // Verifica se é uma struct seguida de { ou (
+        if (registry.typeExists(id))
         {
-            uint position = 0;
-            do
-            {
-                Node value = this.parseExpression(Precedence.LOWEST);
-                if (value is null)
-                {
-                    reportError("Invalid argument in constructor call.", this.peek().loc);
-                    // Recupera até vírgula ou fecha parênteses
-                    while (!this.isAtEnd() && !this.check(TokenKind.Comma) && 
-                           !this.check(TokenKind.RParen))
-                        this.advance();
-                    if (this.check(TokenKind.Comma))
-                        continue;
-                    break;
-                }
-                
-                fieldInits ~= StructFieldInit("", value, position++, value.loc);
-            }
-            while (this.match([TokenKind.Comma]));
+            // User(...) - chamada de construtor
+            if (this.check(TokenKind.LParen))
+                return this.parseStructLit(id, name.loc, true);
+
+            // User{...} - inicialização literal
+            if (this.check(TokenKind.LBrace))
+                return this.parseStructLit(id, name.loc, false);
         }
-        
-        Loc end = this.consume(TokenKind.RParen, 
-            "Expected ')' after constructor arguments.").loc;
-        
-        return new StructLit(structName, fieldInits, true, 
-                             this.getLoc(start, end), true);
+
+        return new Identifier(id, name.loc);
     }
-    else
+
+    StructLit parseStructLit(string structName, Loc start, bool isConstructorCall)
     {
-        // User{...} - literal
-        this.advance(); // consome '{'
-        
-        if (!this.check(TokenKind.RBrace))
+        StructFieldInit[] fieldInits;
+        bool isPositional = true;
+
+        if (isConstructorCall)
         {
-            // Detecta se é posicional ou nomeado no primeiro elemento
-            bool firstElem = true;
-            uint position = 0;
-            
-            do
+            // User("John", 25) - construtor
+            this.advance(); // consome '('
+
+            if (!this.check(TokenKind.RParen))
             {
-                // Verifica se é nomeado (.name = value)
-                if (this.check(TokenKind.Dot))
+                uint position = 0;
+                do
                 {
-                    if (firstElem)
-                        isPositional = false;
-                    else if (isPositional)
-                    {
-                        reportError("Cannot mix positional and named initialization.", 
-                                   this.peek().loc);
-                        return null;
-                    }
-                    
-                    this.advance(); // consome '.'
-                    Token fieldName = this.consume(TokenKind.Identifier, 
-                        "Expected field name after '.'");
-                    this.consume(TokenKind.Equals, 
-                        "Expected '=' after field name.");
-                    
                     Node value = this.parseExpression(Precedence.LOWEST);
                     if (value is null)
                     {
-                        reportError("Invalid value for field '" ~ 
-                                   fieldName.value.get!string ~ "'", 
-                                   fieldName.loc);
-                        // Recupera
+                        reportError("Invalid argument in constructor call.", this.peek().loc);
+                        // Recupera até vírgula ou fecha parênteses
                         while (!this.isAtEnd() && !this.check(TokenKind.Comma) && 
-                               !this.check(TokenKind.RBrace))
+                               !this.check(TokenKind.RParen))
                             this.advance();
                         if (this.check(TokenKind.Comma))
                             continue;
                         break;
                     }
-                    
-                    fieldInits ~= StructFieldInit(fieldName.value.get!string, 
-                                                   value, 0, fieldName.loc);
-                }
-                // Inicialização posicional
-                else
-                {
-                    if (!firstElem && !isPositional)
-                    {
-                        reportError("Cannot mix positional and named initialization.", 
-                                   this.peek().loc);
-                        return null;
-                    }
-                    
-                    Node value = this.parseExpression(Precedence.LOWEST);
-                    if (value is null)
-                    {
-                        reportError("Invalid value in struct literal.", 
-                                   this.peek().loc);
-                        // Recupera
-                        while (!this.isAtEnd() && !this.check(TokenKind.Comma) && 
-                               !this.check(TokenKind.RBrace))
-                            this.advance();
-                        if (this.check(TokenKind.Comma))
-                            continue;
-                        break;
-                    }
-                    
+
                     fieldInits ~= StructFieldInit("", value, position++, value.loc);
                 }
-                
-                firstElem = false;
+                while (this.match([TokenKind.Comma]));
             }
-            while (this.match([TokenKind.Comma]));
-        }
-        
-        Loc end = this.consume(TokenKind.RBrace, 
-            "Expected '}' after struct fields.").loc;
-        
-        return new StructLit(structName, fieldInits, isPositional, 
-                             this.getLoc(start, end), false);
-    }
-}
 
-// Adicione também um helper para validar inicialização vazia
-// User{} - struct vazia
-bool isEmptyStructLit()
-{
-    return this.check(TokenKind.RBrace);
-}
+            Loc end = this.consume(TokenKind.RParen, 
+                "Expected ')' after constructor arguments.").loc;
+
+            return new StructLit(structName, fieldInits, true, 
+                                 this.getLoc(start, end), true);
+        }
+        else
+        {
+            // User{...} - literal
+            this.advance(); // consome '{'
+
+            if (!this.check(TokenKind.RBrace))
+            {
+                // Detecta se é posicional ou nomeado no primeiro elemento
+                bool firstElem = true;
+                uint position = 0;
+
+                do
+                {
+                    // Verifica se é nomeado (.name = value)
+                    if (this.check(TokenKind.Dot))
+                    {
+                        if (firstElem)
+                            isPositional = false;
+                        else if (isPositional)
+                        {
+                            reportError("Cannot mix positional and named initialization.", 
+                                       this.peek().loc);
+                            return null;
+                        }
+
+                        this.advance(); // consome '.'
+                        Token fieldName = this.consume(TokenKind.Identifier, 
+                            "Expected field name after '.'");
+                        this.consume(TokenKind.Equals, 
+                            "Expected '=' after field name.");
+
+                        Node value = this.parseExpression(Precedence.LOWEST);
+                        if (value is null)
+                        {
+                            reportError("Invalid value for field '" ~ 
+                                       fieldName.value.get!string ~ "'", 
+                                       fieldName.loc);
+                            // Recupera
+                            while (!this.isAtEnd() && !this.check(TokenKind.Comma) && 
+                                   !this.check(TokenKind.RBrace))
+                                this.advance();
+                            if (this.check(TokenKind.Comma))
+                                continue;
+                            break;
+                        }
+
+                        fieldInits ~= StructFieldInit(fieldName.value.get!string, 
+                                                       value, 0, fieldName.loc);
+                    }
+                    // Inicialização posicional
+                    else
+                    {
+                        if (!firstElem && !isPositional)
+                        {
+                            reportError("Cannot mix positional and named initialization.", 
+                                       this.peek().loc);
+                            return null;
+                        }
+
+                        Node value = this.parseExpression(Precedence.LOWEST);
+                        if (value is null)
+                        {
+                            reportError("Invalid value in struct literal.", 
+                                       this.peek().loc);
+                            // Recupera
+                            while (!this.isAtEnd() && !this.check(TokenKind.Comma) && 
+                                   !this.check(TokenKind.RBrace))
+                                this.advance();
+                            if (this.check(TokenKind.Comma))
+                                continue;
+                            break;
+                        }
+
+                        fieldInits ~= StructFieldInit("", value, position++, value.loc);
+                    }
+
+                    firstElem = false;
+                }
+                while (this.match([TokenKind.Comma]));
+            }
+
+            Loc end = this.consume(TokenKind.RBrace, 
+                "Expected '}' after struct fields.").loc;
+
+            return new StructLit(structName, fieldInits, isPositional, 
+                                 this.getLoc(start, end), false);
+        }
+    }
+
+    bool isEmptyStructLit()
+    {
+        return this.check(TokenKind.RBrace);
+    }
 
     Node parseCastExpr(Loc start)
     {
@@ -355,7 +348,11 @@ bool isEmptyStructLit()
         {
             string id = this.peek().value.get!string;
             if (registry.typeExists(id))
+            {
+                // writeln("ID: ", id);
+                // this.peek().print();
                 return this.parseCastExpr(start);
+            }
         }
 
         Node expr = this.parseExpression(Precedence.LOWEST);

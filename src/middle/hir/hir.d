@@ -7,9 +7,9 @@ enum HirNodeKind
 {
     Program, Function, Block,
     // Declarações
-    VarDecl, AssignDecl, IndexExpr, StructDecl,
+    VarDecl, AssignDecl, IndexExpr, StructDecl, UnionDecl, EnumDecl, AssignExpr,
     // Statements (Comandos)
-    Store, Return, If, For, CallStmt, Version, While, Break, Continue,
+    Store, Return, If, For, CallStmt, Version, While, Break, Continue, Defer,
     // Expressões
     IntLit, FloatLit, StringLit, BoolLit, CharLit, NullLit, ArrayLit, StructLit,
     Binary, Unary, Cast, Load, AddrOf, CallExpr,
@@ -237,11 +237,12 @@ class HirIndexExpr : HirNode
     this() { kind = HirNodeKind.IndexExpr; }
 }
 
-// Representa: x = y
+// Representa: x = y, x += y, ...
 class HirAssignDecl : HirNode
 {
     HirNode target; // L-Value (onde salvar)
     HirNode value;  // R-Value (o valor)
+    string op;
     
     this() { kind = HirNodeKind.AssignDecl; }
 }
@@ -283,4 +284,37 @@ class HirAddrOfComplex : HirNode
         this.expr = expr;
         this.type = type;
     }
+}
+
+class HirUnionDecl : HirNode
+{
+    string name;
+    string[] fieldNames;
+    Type[] fieldTypes;
+    int[] fieldOffsets;  // Offset de cada campo na memória
+    int totalSize;       // Tamanho total da union
+    
+    this() { kind = HirNodeKind.UnionDecl; }
+}
+
+class HirEnumDecl : HirNode
+{
+    string name;
+    string[] fieldNames;
+    Type[] fieldTypes;
+    int[] fieldOffsets;  // Offset de cada campo na memória
+    int totalSize;       // Tamanho total da enum
+    
+    this() { kind = HirNodeKind.EnumDecl; }
+}
+
+class HirDefer : HirNode
+{
+    HirNode value;
+    this(HirNode value) { kind = HirNodeKind.Defer; this.value = value; }
+}
+
+class HirAssignExpr : HirNode {
+    HirAssignDecl assign;   
+    this() { kind = HirNodeKind.AssignExpr; }
 }

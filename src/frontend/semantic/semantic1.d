@@ -62,6 +62,10 @@ class Semantic1
             collectStructDecl(decl);
         else if (auto mod = cast(ImportStmt) node)
             collectImportStmt(mod);
+        else if (auto enm = cast(EnumDecl) node)
+            collectEnumDecl(enm);
+        else if (auto un = cast(UnionDecl) node)
+            collectUnionDecl(un);
     }
 
     void collectImportStmt(ImportStmt node)
@@ -95,12 +99,12 @@ class Semantic1
             importedCtx = modulesCache[fullPath].ctx;
             importedProgram = modulesCache[fullPath].program;
 
-            reportWarning("The module has been imported more than once; this time it will be imported from the cache.", 
-                node.loc);
+            // reportWarning("The module has been imported more than once; this time it will be imported from the cache.", 
+            //     node.loc);
         }
         else
         {
-            importedCtx = new Context();
+            importedCtx = new Context(error);
             try 
             {
                 string src = readText(fullPath);
@@ -192,6 +196,30 @@ class Semantic1
         ctx.addStruct(symbol);
     }
 
+    void collectEnumDecl(EnumDecl decl)
+    {
+        if (ctx.isDefined(decl.name))
+        {
+            reportError(format("Enum redefinition '%s'", decl.name), decl.loc);
+            return;
+        }
+        EnumType realType = new EnumType(decl.name, decl.members);
+        EnumSymbol symbol = new EnumSymbol(decl.name, realType, decl, decl.loc);
+        ctx.addEnum(symbol);
+    }
+
+    void collectUnionDecl(UnionDecl decl)
+    {
+        if (ctx.isDefined(decl.name))
+        {
+            reportError(format("Union redefinition '%s'", decl.name), decl.loc);
+            return;
+        }
+        UnionType realType = new UnionType(decl.name, decl.fields);
+        UnionSymbol symbol = new UnionSymbol(decl.name, realType, decl, decl.loc);
+        ctx.addUnion(symbol);
+    }
+
     void collectVersionStmt(VersionStmt stmt)
     {
         bool[string] validTargets = [
@@ -249,31 +277,31 @@ class Semantic1
 
     void collectFunctionDecl(FuncDecl decl)
     {
-        if (ctx.isDefined(decl.name))
-        {
-            reportError(format("Function redefinition '%s'", decl.name), decl.loc);
-            return;
-        }
+        // if (ctx.isDefined(decl.name))
+        // {
+        //     reportError(format("Function redefinition '%s'", decl.name), decl.loc);
+        //     return;
+        // }
 
-        // Tipos dos parâmetros serão resolvidos no semantic2
-        // Por enquanto, cria símbolo vazio
-        Type[] paramTypes;
-        foreach (param; decl.args)
-            paramTypes ~= null; // será preenchido depois
+        // // Tipos dos parâmetros serão resolvidos no semantic2
+        // // Por enquanto, cria símbolo vazio
+        // Type[] paramTypes;
+        // foreach (param; decl.args)
+        //     paramTypes ~= null; // será preenchido depois
 
-        Type returnType = null; // será preenchido depois
+        // Type returnType = null; // será preenchido depois
 
-        auto funcSym = new FunctionSymbol(
-            decl.name,
-            paramTypes,
-            returnType,
-            decl,
-            decl.loc
-        );
+        // auto funcSym = new FunctionSymbol(
+        //     decl.name,
+        //     paramTypes,
+        //     returnType,
+        //     decl,
+        //     decl.loc
+        // );
 
-        funcSym.isExternal = decl.body is null;
+        // funcSym.isExternal = decl.body is null;
 
-        if (!ctx.addFunction(funcSym))
-            reportError(format("Error adding function '%s'", decl.name), decl.loc);
+        // if (!ctx.addFunction(funcSym))
+        //     reportError(format("Error adding function '%s'", decl.name), decl.loc);
     }
 }

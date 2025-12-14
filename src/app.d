@@ -80,7 +80,8 @@ void main(string[] args)
             "target",       &config.targetTriple,
             "v|verbose",    &config.verbose,
             "version",      &versionWanted,
-            "help",         &helpWanted
+            "help",         &helpWanted,
+            "C|clang",      &config.compilerArg,
         );
 
         if (helpWanted)
@@ -114,7 +115,7 @@ void main(string[] args)
         Program program = new Parser(tokens, error, registry).parseProgram();
         checkErrors(error);
 
-        Context ctx = new Context();
+        Context ctx = new Context(error);
         
         new Semantic1(ctx, registry, error).analyze(program);
         checkErrors(error);
@@ -124,6 +125,8 @@ void main(string[] args)
 
         new Semantic3(ctx, error, registry).analyze(program);
         checkErrors(error);
+
+        // program.print();
 
         HirProgram hir = new AstLowerer().lower(program);
         
@@ -168,6 +171,6 @@ void main(string[] args)
             exit(1);
         }
         error.printDiagnostics();
-        writeln(e);
+        if (config.verbose) writeln(e);
     }
 }

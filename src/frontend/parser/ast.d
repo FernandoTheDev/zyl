@@ -23,6 +23,8 @@ enum NodeKind
     TypeDecl,
     AssignDecl,
     StructDecl,
+    EnumDecl,
+    UnionDecl,
 
     BinaryExpr,
     CallExpr,
@@ -41,6 +43,7 @@ enum NodeKind
     WhileStmt,
     BrkOrCntStmt, // BreakOrContinueStmt
     ImportStmt,
+    DeferStmt,
 }
 
 abstract class Node
@@ -50,7 +53,7 @@ abstract class Node
     TypeExpr type;
     Type resolvedType = Type.init;
     Loc loc;
-    string nameMangling;
+    string mangledName;
 
     void print(ulong ident = 0, bool isLast = false);
 }
@@ -198,7 +201,7 @@ class StringLit : Node
     this(string n, Loc loc)
     {
         this.kind = NodeKind.StringLit;
-        this.type = new NamedTypeExpr(BaseType.String, loc);
+        this.type = new PointerTypeExpr(new NamedTypeExpr(BaseType.Char, loc), loc);
         this.value = n;
         this.loc = loc;
     }
@@ -316,6 +319,8 @@ class BinaryExpr : Node
 {
     Node left, right;
     string op;
+    bool usesOpBinary = false;
+    bool isRight = false;
     this(Node left, Node right, string op, Loc loc)
     {
         this.kind = NodeKind.BinaryExpr;
@@ -602,14 +607,16 @@ class FuncDecl : Node
     string name;
     BlockStmt body;
     FuncArgument[] args;
-    bool isVarArg;
+    bool isVarArg, noMangle;
     int isVarArgAt;
-
-    this(string name, ref FuncArgument[] args, Node[] body, TypeExpr type, Loc loc, bool isVarArg)
+    bool isExtern = true;
+    
+    this(string name, ref FuncArgument[] args, Node[] body, TypeExpr type, Loc loc, bool isVarArg, 
+        bool isExtern = false, bool noMangle = false)
     {
         this.kind = NodeKind.FuncDecl;
         this.type = type;
-        if (body !is null)
+        if (!isExtern)
             this.body = new BlockStmt(body, loc);
         else
             this.body = null;
@@ -617,6 +624,8 @@ class FuncDecl : Node
         this.args = args;
         this.loc = loc;
         this.isVarArg = isVarArg;
+        this.isExtern = isExtern;
+        this.noMangle = noMangle;
         if (isVarArg)
             this.isVarArgAt = cast(int) args.length - 1; // ao ultimo idx
     }
@@ -932,15 +941,17 @@ class StructDecl : Node
 {
     string name;
     StructField[] fields;
-    StructMethod[] methods;
+    StructMethod[][string] methods;
+    bool noMangle;
 
-    this(string name, StructField[] fields, StructMethod[] methods, Loc loc)
+    this(string name, StructField[] fields, StructMethod[][string] methods, Loc loc, bool noMangle = false)
     {
         this.kind = NodeKind.StructDecl;
         this.name = name;
         this.fields = fields;
         this.methods = methods;
         this.loc = loc;
+        this.noMangle = noMangle;
         this.type = new NamedTypeExpr(BaseType.Void, loc);
     }
 
@@ -972,11 +983,11 @@ class StructDecl : Node
         if (methods.length > 0)
         {
             println(continuation ~ "└── Methods (" ~ to!string(methods.length) ~ "):", ident);
-            foreach (long i, StructMethod method; methods)
-            {
-                bool isLastMethod = (i == cast(uint) methods.length - 1);
-                method.funcDecl.print(ident + continuation.length + 4, isLastMethod);
-            }
+            // foreach (long i, StructMethod method; methods)
+            // {
+            //     bool isLastMethod = (i == cast(uint) methods.length - 1);
+            //     method.funcDecl.print(ident + continuation.length + 4, isLastMethod);
+            // }
         }
     }
 }
@@ -1130,6 +1141,102 @@ class ImportStmt : Node
         }
         writeln("Invalid import expression.", node.loc);
         return "";
+    }
+}
+
+class DeferStmt : Node
+{
+    Node stmt;
+
+    this(Node stmt)
+    {
+        this.kind = NodeKind.DeferStmt;
+        this.stmt = stmt;
+        this.loc = stmt.loc;
+        this.type = new NamedTypeExpr(BaseType.Void, stmt.loc);
+    }
+
+    override void print(ulong ident = 0, bool isLast = false)
+    {
+        string prefix = isLast ? "└── " : "├── ";
+        string continuation = isLast ? "    " : "│   ";
+
+        println(prefix ~ "DeferStmt", ident);
+        println(continuation ~ "└── Deferring:", ident);
+        stmt.print(ident + continuation.length + 4, true);
+    }
+}
+
+class EnumDecl : Node
+{
+    string name;
+    // Maps member name to its integer value (e.g., "RED" -> 0)
+    int[string] members;
+    bool noMangle;
+
+    this(string name, int[string] members, Loc loc, bool noMangle = false)
+    {
+        this.kind = NodeKind.EnumDecl;
+        this.name = name;
+        this.members = members;
+        this.loc = loc;
+        this.noMangle = noMangle;
+        this.type = new NamedTypeExpr(BaseType.Void, loc); // Declaration itself has no type or Void
+    }
+
+    override void print(ulong ident = 0, bool isLast = false)
+    {
+        string prefix = isLast ? "└── " : "├── ";
+        string continuation = isLast ? "    " : "│   ";
+
+        println(prefix ~ "EnumDecl: " ~ name, ident);
+        println(continuation ~ "└── Members:", ident);
+        
+        string[] keys = members.keys;
+        foreach (long i, string key; keys)
+        {
+            string memPrefix = (i == cast(uint) keys.length - 1) ? "└── " : "├── ";
+            println(continuation ~ "    " ~ memPrefix ~ key ~ " = " ~ to!string(members[key]), ident);
+        }
+    }
+}
+
+class UnionDecl : Node
+{
+    string name;
+    StructField[] fields; // We can reuse StructField here as it holds name and type
+    bool noMangle;
+
+    this(string name, StructField[] fields, Loc loc, bool noMangle = false)
+    {
+        this.kind = NodeKind.UnionDecl;
+        this.name = name;
+        this.fields = fields;
+        this.loc = loc;
+        this.noMangle = noMangle;
+        this.type = new NamedTypeExpr(BaseType.Void, loc);
+    }
+
+    override void print(ulong ident = 0, bool isLast = false)
+    {
+        string prefix = isLast ? "└── " : "├── ";
+        string continuation = isLast ? "    " : "│   ";
+
+        println(prefix ~ "UnionDecl: " ~ name, ident);
+        
+        if (fields.length > 0)
+        {
+            println(continuation ~ "└── Fields (" ~ to!string(fields.length) ~ "):", ident);
+            foreach (long i, StructField field; fields)
+            {
+                string fieldPrefix = (i == cast(uint) fields.length - 1) ? "└── " : "├── ";
+                println(continuation ~ "    " ~ fieldPrefix ~ field.name ~ ": " ~ field.type.toStr(), ident);
+            }
+        }
+        else
+        {
+            println(continuation ~ "└── Fields: (empty)", ident);
+        }
     }
 }
 

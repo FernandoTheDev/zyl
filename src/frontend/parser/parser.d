@@ -54,6 +54,8 @@ private:
         if (this.check(TokenKind.LParen))
             return this.parseFuncDecl(type, id);
 
+        writeln(type.toStr());
+        id.print();
         throw new Exception("ERRRORRRR.");
     }
 
@@ -62,8 +64,9 @@ private:
         immutable ulong startPos = this.pos;
 
         if (this.match([TokenKind.SemiColon]))
-            return parse(); 
-
+            if (!this.check(TokenKind.RBrace))
+                return parse();
+        
         if (this.check(TokenKind.Identifier))
         {
             // is a type?
@@ -96,7 +99,7 @@ private:
             return node;
         }
 
-        throw new Exception("Error parsing at position " ~ to!string(startPos));
+        throw new Exception("Error parsing.");
     }
 
     bool isDeclaration()
@@ -106,6 +109,8 @@ private:
         {
         case TokenKind.Type:
         case TokenKind.Struct:
+        case TokenKind.Enum:
+        case TokenKind.Union:
             return true;
         default:
             return false;

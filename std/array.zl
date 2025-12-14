@@ -1,0 +1,54 @@
+import std.libc.io
+import std.libc.mem
+
+struct DynArray {
+    void** data = null;
+    int size = 0;
+    int idx = 0;
+
+    void* opIndex(DynArray* self, int index) {
+        if index >= self.size { exit(1) } // Bounds check simples
+        return self.data[index]
+    }
+
+    void opIndexAssign(DynArray* self, int index, void* val) {
+        if index >= self.size { exit(1) }
+        self.data[index] = val
+    }
+
+    void opAddAssign(DynArray* self, void* val) {
+        // Lógica de resize/realloc aqui...
+        self.data[self.size++] = val
+    }
+
+    DynArray* opIter(DynArray* self) {
+        return self
+    }
+
+    void* opNext(DynArray* self) {
+        if self.idx >= self.size { return null }
+        void* ptr = self.data[self.idx++]
+        return ptr
+    }
+}
+
+int main() {
+    void* data = malloc(100)
+    DynArray arr = DynArray{&data}
+    int x = 69
+    arr += (void*)&x
+
+    /*    
+        foreach (x in arr) {
+            printf("%d\n", *(int*)x)
+        }
+    */
+
+    DynArray* __iter = arr.opIter()
+    void* __val = null
+
+    while (__val = __iter.opNext()) != null
+        printf("%d\n", *(int*)__val)
+
+    return 0
+}

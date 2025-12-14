@@ -1,9 +1,38 @@
-int printf(string msg, ...);
+import std.libc.io : { printf }
+import std.arena
+import std.string
+import std.vector
+
+void makePush(Vector* vec) {
+    String a = String{"The"}      vec.push(&a)
+    String b = String{"Zyl"}      vec.push(&b)
+    String c = String{"Compiler"} vec.push(&c)
+}
 
 int main() {
-    int[1][2] vec = [
-        [60], [9]
-    ]
-    printf("%d\n", vec[0][0] + vec[0][1])
+    Arena arena = Arena{}
+    arena.create(4096)
+    defer arena.destroy()
+
+    Vector vec = Vector{}
+    defer vec.destroy()
+    // Vector<String> 
+    vec.init_with_arena(sizeof String, &arena)
+    
+    makePush(&vec)
+    printf("Len: %d\n", vec.length)
+    
+    for int i = 0; i < vec.length; i++ {
+        String* val = (String*) vec.get(i)
+        printf("[%d] = %s\n", i, (*val).str)
+    }
+
+    vec.clear()     
+    String d = String{"Fernando"}
+    vec.push(&d)
+    
+    String* val_d = (String*) vec.get(0)
+    printf("%s\n", *val_d.str)
+
     return 0
 }

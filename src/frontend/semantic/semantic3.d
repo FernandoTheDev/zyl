@@ -35,25 +35,47 @@ class Semantic3
 
     Node analyzeDeclaration(Node node)
     {
-        if (auto varDecl = cast(VarDecl) node) {
+        if (auto varDecl = cast(VarDecl) node)
             analyzeVarDecl(varDecl, true);
-            return varDecl;
-        }
-        else if (auto funcDecl = cast(FuncDecl) node) {
+        else if (auto funcDecl = cast(FuncDecl) node)
             this.funcAnalyzer.analyzeFunction(funcDecl);
-            return funcDecl;
-        } else if (auto versionStmt = cast(VersionStmt) node) {
+        else if (auto versionStmt = cast(VersionStmt) node)
             analyzeVersionStmt(versionStmt, true);
-            return versionStmt;
-        }
-        else if (auto structDecl = cast(StructDecl) node) {
+        else if (auto structDecl = cast(StructDecl) node)
             analyzeStructDecl(structDecl);
-            return structDecl;
-        }
-        return null;
+        else if (auto un = cast(UnionDecl) node)
+            analyzeUnionDecl(un);
+        else if (auto enm = cast(EnumDecl) node)
+            return enm;
+        return node;
     }
 
-    // Nova função para analisar struct declarations
+    void analyzeUnionDecl(UnionDecl decl)
+    {
+        UnionSymbol sym = ctx.lookupUnion(decl.name);
+        if (sym is null)
+        {
+            reportError(format("Union '%s' not found in context.", decl.name), decl.loc);
+            return;
+        }
+
+        foreach (ref field; decl.fields)
+        {
+            if (field.defaultValue !is null)
+            {
+                Type valueType = checker.checkExpression(field.defaultValue);
+                if (!field.resolvedType.isCompatibleWith(valueType))
+                {
+                    reportError(
+                        format("Default value for field '%s' has incompatible type: expected '%s', got '%s'",
+                               field.name, field.resolvedType.toStr(), valueType.toStr()),
+                        field.defaultValue.loc
+                    );
+                }
+            }
+        }
+    }
+
     void analyzeStructDecl(StructDecl decl)
     {
         StructSymbol structSym = ctx.lookupStruct(decl.name);
@@ -63,15 +85,11 @@ class Semantic3
             return;
         }
 
-        // 1. Valida valores padrão dos campos
         foreach (ref field; decl.fields)
         {
             if (field.defaultValue !is null)
             {
-                // Type check do valor padrão
                 Type valueType = checker.checkExpression(field.defaultValue);
-
-                // Verifica compatibilidade
                 if (!field.resolvedType.isCompatibleWith(valueType))
                 {
                     reportError(
@@ -83,17 +101,15 @@ class Semantic3
             }
         }
 
-        // 2. Analisa métodos (incluindo construtores)
-        foreach (ref method; decl.methods)
-            analyzeStructMethod(structSym, method);
+        foreach (methodName, overloads; decl.methods)
+            foreach (ref method; overloads)
+                analyzeStructMethod(structSym, method);
     }
 
-    // Analisa um método de struct
     void analyzeStructMethod(StructSymbol structSym, ref StructMethod method)
     {
         FuncDecl funcDecl = method.funcDecl;
         
-        // 1. Valida valores padrão dos parâmetros
         foreach (ref param; funcDecl.args)
         {
             if (param.value !is null)
@@ -113,13 +129,10 @@ class Semantic3
             }
         }
     
-        // 2. Se o método tem corpo, analisa ele
         if (funcDecl.body !is null)
         {
-            // Entra no contexto da struct
             ctx.enterStruct(structSym);
             
-            // Cria um FunctionSymbol temporário para o método
             Type[] paramTypes;
             foreach (param; funcDecl.args)
                 paramTypes ~= param.resolvedType;
@@ -132,10 +145,8 @@ class Semantic3
                 funcDecl.loc
             );
             
-            // Entra no contexto da função
             ctx.enterFunction(funcSym);
             
-            // Adiciona parâmetros ao escopo
             foreach (i, param; funcDecl.args)
             {
                 if (!ctx.addVariable(param.name, param.resolvedType, false, param.loc))
@@ -147,18 +158,12 @@ class Semantic3
                 }
             }
             
-            // Adiciona 'this' ao escopo (referência à instância da struct)
-            // if (!ctx.addVariable("this", structSym.structType, true, funcDecl.loc))
-            //     reportError("Failed to add 'this' to scope", funcDecl.loc);
-
             Program program = new Program(funcDecl.body.statements);
             new Semantic1(ctx, registry, error).analyze(program);
             new Semantic2(ctx, error, registry).analyze(program);
         
-            // Analisa corpo do método
             analyzeBlockStmt(funcDecl.body);
             
-            // Verifica se métodos não-void têm return
             if (!method.isConstructor && !funcDecl.resolvedType.isVoid())
                 if (!hasReturn(funcDecl.body))
                     reportError(
@@ -167,16 +172,26 @@ class Semantic3
                         funcDecl.loc
                     );
             
-            // Sai dos contextos
             ctx.exitFunction();
             ctx.exitStruct();
         }
     }
 
-    void analyzeAssignDecl(AssignDecl decl)
+    Node analyzeAssignDecl(Node node)
     {
+        AssignDecl decl = cast(AssignDecl) node;
         Type leftType = checker.checkExpression(decl.left);
         Type rightType = checker.checkExpression(decl.right);
+        
+        if (decl.op == "+=")
+            if (StructType st = cast(StructType) leftType)
+                if (st.hasMethod("opAddAssign"))
+                {
+                    Node call = new CallExpr(new MemberExpr(decl.left, "opAddAssign", decl.left.loc), [decl.right], 
+                        decl.loc);
+                    analyzeCall(cast(CallExpr)call);
+                    return call;
+                }
 
         checker.checkTypeComp(leftType, rightType, decl.loc);
 
@@ -186,6 +201,7 @@ class Semantic3
                         decl.op, leftType.toStr(), rightType.toStr()), decl.loc);
         
         decl.resolvedType = leftType;
+        return decl;
     }
 
     bool isValidCompoundAssignment(Type left, Type right, string op)
@@ -212,36 +228,32 @@ class Semantic3
 
     void analyzeVarDecl(VarDecl decl, bool isGlobal = false)
     {
-        // Analisa inicializador
         decl.isGlobal = isGlobal;
         Node init_ = decl.value.get!Node;
         VarSymbol sym = ctx.lookupVariable(decl.id);
+
         if (init_ !is null)
         {
             Type initType = checker.checkExpression(init_);
             if (decl.resolvedType !is null)
             {
+                checker.makeImplicitCast(init_, decl.resolvedType);
+                // if (castedNode !is null)
+                // {
+                //     init_ = castedNode;
+                //     initType = decl.resolvedType;   
+                //     decl.value = castedNode; 
+                // }
+
                 if (!decl.resolvedType.isCompatibleWith(initType))
                     reportError(format("Incompatible type: expected '%s', got '%s'",
                             decl.resolvedType.toStr(), initType.toStr()), init_.loc);
-
-                // se são compativeis então atualiza o tipo do init pelo tipo resolvido da variavel
-                // writeln(init_.resolvedType.toStr());
-                init_.resolvedType = decl.resolvedType;
-                // writeln(init_.resolvedType.toStr());
-
-                if (sym !is null)
-                {
-                    if (!initType.isArray())
-                    {
-                        sym.type = initType;
-                        decl.resolvedType = initType;
-                    }
-                }
+                
+                if (sym !is null && sym.type is null)
+                     sym.type = decl.resolvedType;
             }
             else
             {
-                // Inferência de tipo
                 decl.resolvedType = initType;
                 if (sym !is null)
                     sym.type = initType;
@@ -266,56 +278,46 @@ class Semantic3
 
         ctx.enterScope("block");
 
-        foreach (node; stmt.statements)
-            analyzeStatement(node, sema, isGlobal);
+        foreach (i, node; stmt.statements)
+            stmt.statements[i] = analyzeStatement(node, sema, isGlobal);
 
         ctx.exitScope();
     }
 
     Node analyzeStatement(Node stmt, bool sema = false, bool isGlobal = false)
     {
-        if (auto varDecl = cast(VarDecl) stmt) {
+        if (auto varDecl = cast(VarDecl) stmt)
             analyzeVarDecl(varDecl, isGlobal);
-            return varDecl;
-        }
-        else if (auto ifStmt = cast(IfStmt) stmt) {
+        else if (auto ifStmt = cast(IfStmt) stmt)
             analyzeIfStmt(ifStmt);
-            return ifStmt;
-        }
         else if (auto whileStmt = cast(WhileStmt) stmt)
             analyzeWhileStmt(whileStmt);
-        else if (auto forStmt = cast(ForStmt) stmt) {
+        else if (auto forStmt = cast(ForStmt) stmt)
             analyzeForStmt(forStmt);
-            return forStmt;
-        }
-        else if (auto returnStmt = cast(ReturnStmt) stmt) {
+        else if (auto returnStmt = cast(ReturnStmt) stmt)
             analyzeReturnStmt(returnStmt);
-            return stmt;
-        }
-        else if (auto call = cast(CallExpr) stmt) {
+        else if (auto call = cast(CallExpr) stmt)
             analyzeCall(call);
-            return call;
-        }
         else if (auto brkc = cast(BrkOrCntStmt) stmt)
             analyzeBrkOrCntStmt(brkc);
-        else if (auto blockStmt = cast(BlockStmt) stmt) {
+        else if (auto blockStmt = cast(BlockStmt) stmt)
             analyzeBlockStmt(blockStmt, sema);
-            return blockStmt;
-        }
-        else if (auto assign = cast(AssignDecl) stmt) {
-            analyzeAssignDecl(assign);
-            return assign;
-        }
-        else if (auto versionStmt = cast(VersionStmt) stmt) {
+        else if (auto assign = cast(AssignDecl) stmt)
+            return analyzeAssignDecl(assign);
+        else if (auto versionStmt = cast(VersionStmt) stmt)
             analyzeVersionStmt(versionStmt);
-            return versionStmt;
-        }
         else if (UnaryExpr unary = cast(UnaryExpr) stmt) {
             unary.operand.resolvedType = checker.checkExpression(unary.operand);
             unary.resolvedType = unary.operand.resolvedType;
-            return unary;
         }
-        return null;
+        else if (auto defer = cast(DeferStmt) stmt)
+            analyzeDeferStmt(defer);
+        return stmt;
+    }
+
+    void analyzeDeferStmt(DeferStmt stmt)
+    {
+        stmt.stmt = analyzeStatement(stmt.stmt);
     }
 
     pragma(inline, true);

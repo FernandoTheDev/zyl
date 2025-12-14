@@ -1,0 +1,198 @@
+// virtual machine write in Zyl Programming Language
+import std.libc.io : { printf, exit }
+import std.test : { assert }
+import std.libc.mem : { malloc, free }
+
+enum OpCode {
+    Push
+    Pop
+    Addi
+    Addl
+    Print
+    Halt
+}
+
+enum Type {
+    Int
+    Long
+    String
+}
+
+union Literal {
+    int    i;
+    long   l;
+    string s;
+    bool   b;
+    float  f;
+    double d;
+}
+
+struct Value {
+    Type ty;
+    Literal val;
+}
+
+struct Instruction {
+    OpCode op;
+    Value val = null
+}
+
+Value makeInt(int n) {
+    Value val;
+    Literal value;
+    value.i = n
+    val.ty = Type.Int
+    val.val = value
+    return val
+}
+
+Value makeString(string str) {
+    Value val;
+    Literal value;
+    value.s = str
+    val.ty = Type.String
+    val.val = value
+    return val
+}
+
+struct VirtualMachine {
+    int pc = 0
+    int len = 0
+    Instruction* program = null
+    int stackLen = 0
+    Value* stack = null;
+
+    void run(VirtualMachine* self) {
+        Instruction* instr;
+        Value left;
+        Value right;
+        while self.pc < self.len {
+            instr = &(self.program[self.pc])
+            
+            if instr.op == OpCode.Push {
+                self.push(instr.val)
+                self.pc++
+                continue
+            }
+
+            if instr.op == OpCode.Addi {
+                left = self.pop()
+                right = self.pop()
+                self.checkType(Type.Int, left.ty); self.checkType(Type.Int, right.ty)
+                self.push(makeInt(left.val.i + right.val.i))
+                self.pc++
+                continue
+            }
+
+            if instr.op == OpCode.Print {
+                left = self.pop()
+                if left.ty == Type.Int
+                    printf("%d", left.val.i)
+                else if left.ty == Type.Long
+                    printf("%lld", left.val.l)
+                else if left.ty == Type.String
+                    printf("%s", left.val.s)
+                else {
+                    printf("invalid type: %d\n", left.ty)
+                    exit(1)
+                }
+                self.pc++
+                continue
+            }
+            
+            if instr.op == OpCode.Halt {
+                self.pc = self.len
+                continue
+            }
+
+            printf("invalid opcode!")
+            exit(1)
+        }
+    }
+
+    void checkType(VirtualMachine* self, Type expected, Type received)
+    {
+        if expected != received {
+            printf("expected type '%d' and received '%d'.", expected, received)
+            exit(1)
+        }
+    }
+
+    void push(VirtualMachine* self, Value val) {
+        self.stack[self.stackLen++] = val
+    }
+
+    Value pop(VirtualMachine* self) {
+        if self.stackLen == 0 {
+            printf("Stack UnderFlow!\n")
+            exit(1)
+        }
+        self.stackLen--
+        Value val = self.stack[self.stackLen]
+        return val
+    }
+}
+
+struct Builder {
+    int len = 0
+    Instruction* instructions;
+
+    Builder* push(Builder* self, Value val) {
+        self.instructions[self.len++] = Instruction{OpCode.Push, val}
+        return self
+    }
+
+    Builder* addi(Builder* self) {
+        self.instructions[self.len++] = Instruction{OpCode.Addi}
+        return self
+    }
+
+    Builder* print(Builder* self) {
+        self.instructions[self.len++] = Instruction{OpCode.Print}
+        return self
+    }
+
+    Builder* halt(Builder* self) {
+        self.instructions[self.len++] = Instruction{OpCode.Halt}
+        return self
+    }
+}
+
+int main() {
+    int PROG_LIMIT = 1024
+    int STACK_LIMIT = 1024
+    int SIZEI = sizeof Instruction
+    int SIZEV = sizeof Value
+    Instruction* prog = (Instruction*) malloc(SIZEI * PROG_LIMIT)
+
+    if prog == null {
+        printf("mem error!")
+        return 0
+    }
+
+    defer free(prog)
+
+    Builder builder = Builder {.instructions = prog}
+    builder
+        .push(makeInt(60))
+        .push(makeInt(9))
+        .addi()
+        .print()
+        .push(makeString("\n"))
+        .print()
+        .halt()
+
+    Value* stack = (Value*) malloc(SIZEV * STACK_LIMIT)
+
+    if stack == null {
+        printf("mem error stack malloc!")
+        return 0
+    }
+
+    defer free(stack)
+
+    VirtualMachine vm = VirtualMachine{ .len = builder.len, .program = prog, .stack = stack }
+    vm.run()
+
+    return 0
+}

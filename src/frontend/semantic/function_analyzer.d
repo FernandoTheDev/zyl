@@ -19,18 +19,15 @@ class FunctionAnalyzer
     }
 
     void analyzeFunction(FuncDecl decl)
-    {
-        FunctionSymbol funcSym = ctx.lookupFunction(decl.name);
+    {   
+        Type[] args = decl.args.map!(x => x.resolvedType).array;
+        FunctionSymbol funcSym = ctx.findFunction(decl.name, args, decl.resolvedType);
         if (funcSym is null)
             return;
 
         ctx.enterFunction(funcSym);
 
         if (decl.body !is null) {
-            // Program program = new Program(decl.body.statements);
-            // new Semantic1(ctx, error).analyze(program);
-            // new Semantic2(ctx, error, sema3.registry).analyze(program);
-
             foreach (param; decl.args)
                 if (!ctx.addVariable(param.name, param.resolvedType, false, decl.loc))
                     error.addError(Diagnostic(

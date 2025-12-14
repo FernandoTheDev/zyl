@@ -1,0 +1,192 @@
+import std.libc.mem : { malloc, calloc, free }
+import std.libc.string : { strcmp, strlen }
+import std.libc.io : { printf, exit }
+
+// Nó da lista encadeada (para colisões)
+struct Entry {
+    string key;
+    void* value;
+    Entry* next = null
+}
+
+struct HashMap {
+    Entry** buckets = null
+    int capacity = 0
+    int count = 0
+
+    // Inicializa com um tamanho fixo (ex: 16 ou 64)
+    void init(HashMap* self, int capacity) {
+        self.capacity = capacity
+        // calloc garante que os ponteiros iniciem como NULL
+        self.buckets = (Entry**) calloc(capacity, 8) 
+        self.count = 0
+    }
+
+    // Algoritmo FNV-1a Hash
+    int hash(HashMap* self, string key) {
+        long hash = -2128831035L
+        int len = strlen(key)
+        for int i = 0; i < len; i++ {
+            hash = hash ^ (long)key[i]
+            hash = hash * 16777619L
+        }
+        // Garante positivo e dentro do range
+        int idx = (int)(hash % self.capacity)
+        if idx < 0 { idx = idx * -1 }
+        return idx
+    }
+
+    void put(HashMap* self, string key, void* value) {
+        if self.buckets == null { self.init(16) } // Init preguiçoso
+
+        int idx = self.hash(key)
+        Entry* current = self.buckets[idx]
+
+        // 1. Tenta achar para substituir
+        while current != null {
+            if strcmp(current.key, key) == 0 {
+                current.value = value // Atualiza
+                return;
+            }
+            current = current.next
+        }
+
+        // 2. Não achou, cria novo nó e insere no INÍCIO da lista (mais rápido)
+        Entry* new_entry = (Entry*) malloc(sizeof Entry)
+        new_entry.key = key
+        new_entry.value = value
+        new_entry.next = self.buckets[idx] // Aponta pro antigo head
+        
+        self.buckets[idx] = new_entry // Vira o novo head
+        self.count = self.count + 1
+    }
+
+    void* get(HashMap* self, string key) {
+        if self.buckets == null { return null }
+        
+        int idx = self.hash(key)
+        Entry* current = self.buckets[idx]
+
+        while current != null {
+            if strcmp(current.key, key) == 0 {
+                return current.value // Achou
+            }
+            current = current.next
+        }
+        return null // Não achou
+    }
+
+    void remove(HashMap* self, string key) {
+        if self.buckets == null { return; }
+        
+        int idx = self.hash(key)
+        Entry* current = self.buckets[idx]
+        Entry* prev = null
+
+        while current != null {
+            if strcmp(current.key, key) == 0 {
+                // Achou. Vamos remover.
+                if prev == null {
+                    // Era o primeiro da lista
+                    self.buckets[idx] = current.next
+                } else {
+                    // Estava no meio ou fim
+                    ((Entry*)prev).next = current.next
+                }
+                free(current)
+                self.count = self.count - 1
+                return;
+            }
+            prev = current
+            current = current.next
+        }
+    }
+
+    void destroy(HashMap* self) {
+        if self.buckets == null { return; }
+
+        // Percorre todos os buckets e libera as listas
+        for int i = 0; i < self.capacity; i++ {
+            Entry* current = self.buckets[i]
+            while current != null {
+                Entry* next = current.next
+                free(current)
+                current = next
+            }
+        }
+        free(self.buckets)
+        self.buckets = null
+        self.count = 0
+    }
+}
+
+
+void assert(bool condition, string msg) {
+    if condition {
+        printf("[PASS] %s\n", msg)
+    } else {
+        printf("[FAIL] %s\n", msg)
+        exit(1)
+    }
+}
+
+// int main() {
+//     printf("=== Iniciando Teste de Stress do HashMap ===\n")
+
+//     HashMap map = HashMap{}
+//     // Capacidade MINÚSCULA (4) para forçar colisões imediatas!
+//     // Pelo Princípio da Casa dos Pombos, ao inserir o 5º item, haverá colisão.
+//     map.init(4) 
+//     defer map.destroy()
+
+//     // 1. Inserção Básica
+//     map.put("apple", (void*) 10)
+//     map.put("banana", (void*) 20)
+    
+//     int val_apple = (int) map.get("apple")
+//     assert(val_apple == 10, "Apple == 10")
+
+//     // 2. Atualização (Update)
+//     // "apple" já existe, deve atualizar o valor e NÃO criar novo nó
+//     map.put("apple", (void*) 999) 
+//     assert((int)map.get("apple") == 999, "Apple atualizado para 999")
+//     assert(map.count == 2, "Count mantido em 2 apos update")
+
+//     // 3. Forçando Colisões (Chaining)
+//     // Vamos encher de dados. Como capacity é 4, vai formar listas longas.
+//     map.put("cherry", (void*) 30)
+//     map.put("date", (void*) 40)
+//     map.put("elderberry", (void*) 50)
+//     map.put("fig", (void*) 60)
+
+//     // Verifica se tudo está lá (mesmo com colisão)
+//     assert((int)map.get("banana") == 20, "Recuperando Banana (em meio a colisoes)")
+//     assert((int)map.get("fig") == 60, "Recuperando Fig (ultimo inserido)")
+
+//     // 4. Testando NULL (Chave inexistente)
+//     if map.get("zombie") == null {
+//         assert(true, "Zombie nao existe")
+//     } else {
+//         assert(false, "Zombie deveria ser null")
+//     }
+
+//     // 5. Remoção Complexa
+//     // Vamos remover algo que provavelmente está no meio de uma lista encadeada
+//     int count_before = map.count
+//     map.remove("banana")
+    
+//     if map.get("banana") == null {
+//         assert(true, "Banana removida com sucesso")
+//     } else {
+//         assert(false, "Banana ainda existe!")
+//     }
+
+//     assert(map.count == count_before - 1, "Count decrementado corretamente")
+
+//     // Verifica integridade: "apple" e "cherry" (vizinhos prováveis) ainda existem?
+//     assert((int)map.get("apple") == 999, "Apple sobreviveu a remocao da Banana")
+//     assert((int)map.get("cherry") == 30, "Cherry sobreviveu a remocao da Banana")
+
+//     printf("=== Testes Concluidos (Total itens: %d) ===\n", map.count)
+//     return 0
+// }

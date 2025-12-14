@@ -228,36 +228,32 @@ class Semantic3
 
     void analyzeVarDecl(VarDecl decl, bool isGlobal = false)
     {
-        // Analisa inicializador
         decl.isGlobal = isGlobal;
         Node init_ = decl.value.get!Node;
         VarSymbol sym = ctx.lookupVariable(decl.id);
+
         if (init_ !is null)
         {
             Type initType = checker.checkExpression(init_);
             if (decl.resolvedType !is null)
             {
+                checker.makeImplicitCast(init_, decl.resolvedType);
+                // if (castedNode !is null)
+                // {
+                //     init_ = castedNode;
+                //     initType = decl.resolvedType;   
+                //     decl.value = castedNode; 
+                // }
+
                 if (!decl.resolvedType.isCompatibleWith(initType))
                     reportError(format("Incompatible type: expected '%s', got '%s'",
                             decl.resolvedType.toStr(), initType.toStr()), init_.loc);
-
-                // se são compativeis então atualiza o tipo do init pelo tipo resolvido da variavel
-                // writeln(init_.resolvedType.toStr());
-                init_.resolvedType = decl.resolvedType;
-                // writeln(init_.resolvedType.toStr());
-
-                if (sym !is null)
-                {
-                    if (!initType.isArray())
-                    {
-                        sym.type = initType;
-                        decl.resolvedType = initType;
-                    }
-                }
+                
+                if (sym !is null && sym.type is null)
+                     sym.type = decl.resolvedType;
             }
             else
             {
-                // Inferência de tipo
                 decl.resolvedType = initType;
                 if (sym !is null)
                     sym.type = initType;

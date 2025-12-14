@@ -1,0 +1,9 @@
+import std.libc.io : { printf }
+
+int main() {
+    double x = 10
+    long z = 67.0
+    int y = x + z
+    printf("%d %f %d\n", z, x, y)
+    return 0
+}

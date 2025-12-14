@@ -209,8 +209,8 @@ class PrimitiveType : Type
 
     static PrimitiveType promote(PrimitiveType left, PrimitiveType right)
     {
-        int leftLevel = TYPE_HIERARCHY.get(cast(string) left.baseType, 0);
-        int rightLevel = TYPE_HIERARCHY.get(cast(string) right.baseType, 0);
+        int leftLevel = TYPE_HIERARCHY.get(left.baseType, 0);
+        int rightLevel = TYPE_HIERARCHY.get(right.baseType, 0);
         return (leftLevel >= rightLevel) ? left : right;
     }
 }

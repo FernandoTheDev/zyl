@@ -136,6 +136,55 @@ private:
         return new PrimitiveType(BaseType.Any);
     }
 
+    public void makeImplicitCast(ref Node node, Type targetType)
+    {
+        Node cast_ = implicitCast(node, targetType);
+        if (cast_ != node)
+            node = cast_;
+    }
+
+    public Node implicitCast(Node node, Type targetType)
+    {
+        Type sourceType = node.resolvedType;
+
+        if (targetType == sourceType)
+            return node;
+
+        if (!targetType.isCompatibleWith(sourceType, false))
+            return node;
+        
+        if (isNumeric(sourceType) && isNumeric(targetType))
+        {
+            auto castNode = new CastExpr(null, node, node.loc);
+            castNode.resolvedType = targetType; 
+            return castNode;
+        }
+
+        if (targetType.toStr() == "void*" && sourceType.isPointer()) 
+        {
+             auto castNode = new CastExpr(null, node, node.loc);
+             castNode.resolvedType = targetType;
+             return castNode;
+        }
+
+        if (sourceType.toStr() == "null" && targetType.isPointer())
+             return node;
+
+        return node;
+    }
+
+    int getRank(Type t) 
+    {
+        if (PrimitiveType p = cast(PrimitiveType) t)
+            return TYPE_HIERARCHY.get(p.baseType, 0);
+        return 0;
+    }
+
+    bool isNumeric(Type t)
+    {
+        return getRank(t) > 0;
+    }
+
     Type checkStructLit(StructLit lit)
     {
         // Busca a struct
@@ -207,14 +256,16 @@ private:
             }
             
             // Valida cada campo na ordem
-            foreach (i, init; lit.fieldInits)
+            foreach (i, ref init; lit.fieldInits)
             {
                 if (i >= structType.fields.length)
                     break;
                 
                 StructField field = structType.fields[i];
                 Type valueType = checkExpression(init.value);
-                
+                makeImplicitCast(init.value, field.resolvedType);
+                valueType = init.value.resolvedType;
+
                 if (!field.resolvedType.isCompatibleWith(valueType))
                 {
                     reportError(
@@ -497,7 +548,7 @@ private:
         Type rightType = checkExpression(expr.right);
         expr.right.resolvedType = rightType;
         PointerType ptr;
-
+        
         string op = expr.op;
 
         // Caso 1: Ponteiro + Inteiro (ex: walker + 1)
@@ -622,9 +673,9 @@ private:
 
             // Type promotion
             Type t = leftType.getPromotedType(rightType);
-            expr.left.resolvedType = t;
-            expr.right.resolvedType = t;
             expr.resolvedType = t;
+            makeImplicitCast(expr.right, expr.resolvedType);
+            makeImplicitCast(expr.left, expr.resolvedType);
             return t;
         }
 
@@ -778,23 +829,16 @@ private:
                 return new PrimitiveType(BaseType.Any);
             }
 
-            // 1.5. Coleta os tipos dos argumentos ANTES de buscar o método
             Type[] argTypes;
             foreach (arg; expr.args)
                 argTypes ~= checkExpression(arg);
             
-            // 2. Busca o método na struct com os tipos dos argumentos
             StructMethod* method = structType.findMethod(mem.member, argTypes);
             if (method is null) {
                 reportError(format("The method '%s' does not exist in the struct '%s' with the given signature.", 
                     mem.member, structType.name), mem.loc);
                 return new PrimitiveType(BaseType.Any);
             }
-
-            // 3. Valida os argumentos
-            // O método espera (this, arg1, arg2...)
-            // A chamada tem (arg1, arg2...)
-            // Precisamos validar se 'targetType' bate com o primeiro parametro (this)
 
             FuncDecl funcDecl = method.funcDecl;
             size_t expectedArgs = funcDecl.args.length;

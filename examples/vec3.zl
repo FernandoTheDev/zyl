@@ -2,9 +2,9 @@ import std.libc.io : { printf }
 import std.libc.math : { sqrt }
 
 struct Vec3 {
-    float x = 0F
-    float y = 0F
-    float z = 0F
+    f64 x = 0.0
+    f64 y = 0.0
+    f64 z = 0.0
     
     // Operadores vetoriais
     Vec3 opAdd(Vec3* self, Vec3 other) {
@@ -16,23 +16,23 @@ struct Vec3 {
     }
     
     // Multiplicação por escalar
-    Vec3 opMul(Vec3* self, float scalar) {
+    Vec3 opMul(Vec3* self, f64 scalar) {
         return Vec3{self.x * scalar, self.y * scalar, self.z * scalar}
     }
     
-    Vec3 opMulRight(Vec3* self, float scalar) {
+    Vec3 opMulRight(Vec3* self, f64 scalar) {
         return self.opMul(scalar)  // Multiplicação é comutativa
     }
     
     // Produto escalar
-    float dot(Vec3* self, Vec3 other) {
+    f64 dot(Vec3* self, Vec3 other) {
         return self.x * other.x + self.y * other.y + self.z * other.z
     }
     
     // Normalização
     Vec3 normalized(Vec3* self) {
-        float len = (float)sqrt((double)(self.x*self.x + self.y*self.y + self.z*self.z))
-        if len == 0F return Vec3{}
+        f64 len = sqrt(self.x*self.x + self.y*self.y + self.z*self.z)
+        if len == 0.0 return Vec3{}
         return Vec3{self.x/len, self.y/len, self.z/len}
     }
     
@@ -52,30 +52,30 @@ struct Vec3 {
     
     // Método de impressão
     void print(Vec3* self) {
-        printf("Vec3(%.2f, %.2f, %.2f)\n", (double)self.x, (double)self.y, (double)self.z)
+        printf("Vec3(%.2f, %.2f, %.2f)\n", self.x, self.y, self.z)
     }
 }
 
 int main() {
-    Vec3 a = Vec3{1F, 2F, 3F}
-    Vec3 b = Vec3{4F, 5F, 6F}
+    Vec3 a = Vec3{1, 2, 3}
+    Vec3 b = Vec3{4, 5, 6}
     
     Vec3 c = a + b          // (5, 7, 9)
-    Vec3 d = c * 2F        // (10, 14, 18)
-    Vec3 e = 3F * c        // (15, 21, 27) via opMulRight
+    Vec3 d = c * 2.0        // (10, 14, 18)
+    Vec3 e = 3.0 * c        // (15, 21, 27) via opMulRight
     
     c.print()
     d.print()
     e.print()
     
-    a += Vec3{0.5F, 0.5F, 0.5F}
+    a += Vec3{0.5, 0.5, 0.5}
     a.print()
     
     if a < b
         printf("a < b\n")
     
-    float dp = a.dot(b)
-    printf("Dot product: %.2f\n", (double)dp)
+    f64 dp = a.dot(b)
+    printf("Dot product: %.2f\n", dp)
     
     return 0
 }

@@ -43,6 +43,8 @@ struct MirValue
     MirValue[] elements; // Os valores constantes dentro do array
     bool isArgument = false; 
     int argIndex; // Índice do argumento na função LLVM (0, 1, 2...)
+    bool isRef;
+    FunctionType refType;
 
     static MirValue reg(int idx, Type t) { 
         return MirValue(false, false, 0, 0.0, "", idx, t); 
@@ -112,6 +114,7 @@ class MirInstr {
     MirOp op;
     MirValue dest; 
     MirValue[] operands;
+    bool isIndirectCall;
     
     this(MirOp op, MirValue dest = MirValue.init, MirValue[] operands = []) 
     { this.op = op; this.dest = dest; this.operands = operands; }

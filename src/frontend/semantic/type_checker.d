@@ -505,12 +505,11 @@ private:
         return left;
     }
 
-    Type checkIdentifier(Identifier ident)
+    Type checkIdentifier(ref Identifier ident)
     {
         string id = ident.value.get!string;
         Symbol sym = ctx.lookup(id);
-        
-
+    
         if (sym is null)
         {
             reportError(format("'%s' was not declared.", id), ident.loc);
@@ -520,7 +519,10 @@ private:
         if (FunctionSymbol fn = cast(FunctionSymbol) sym)
         {
             FunctionType type = new FunctionType(fn.paramTypes, fn.returnType);
+            type.mangled = fn.declaration.mangledName;
             ident.resolvedType = type;
+            ident.mangledName = type.mangled;
+            ident.isFunctionReference = true;
             return type;
         }
 
@@ -915,6 +917,7 @@ private:
         bool isRef = false;
         FunctionType type;
         Node ident = null;
+        string id = "";
 
         if (Identifier id_ = cast(Identifier) expr.id)
             ident = id_;
@@ -924,7 +927,7 @@ private:
 
         if (ident !is null)
         {
-            string id = ident.value.get!string;
+            id = ident.value.get!string;
             funcSym = ctx.findFunction(id, argTypes, null);
 
             if (funcSym is null)
@@ -935,12 +938,17 @@ private:
                     if (FunctionType t = cast(FunctionType) sym.type)
                     {
                         type = t;
+                        if (t.mangled != "")
+                            expr.mangledName = t.mangled;
+                        else
+                            expr.mangledName = id;
                         funcSym = new FunctionSymbol(id, t.paramTypes, t.returnType, null, ident.loc);
                         isRef = true;
+                        expr.isRef = true;
+                        expr.refType = t;
                     }
                 }
-            } else
-                expr.mangledName = funcSym.declaration.mangledName;
+            }
         }
 
         if (funcSym is null)
@@ -1003,10 +1011,11 @@ private:
 
         if (isRef)
         {
-            expr.resolvedType = type;
-            return type;
+            expr.resolvedType = type.returnType;
+            return type.returnType;
         }
         else {
+            expr.mangledName = funcSym.declaration.mangledName;
             expr.resolvedType = funcSym.returnType;
             return funcSym.returnType;
         }

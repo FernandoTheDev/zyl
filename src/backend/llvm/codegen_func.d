@@ -52,17 +52,17 @@ mixin template CodeGenFunc() {
                 emitInstr(instr);
                 
                 // Store dos parâmetros nas allocas correspondentes (apenas no bloco de entrada)
-                if (blockIdx == 0 && 
-                    instr.op == MirOp.Alloca && 
-                    allocaCount < paramCount &&
-                    instr.dest.regIndex < vregMap.length &&
-                    vregMap[instr.dest.regIndex] !is null)
-                {
-                    LLVMValueRef allocaPtr = vregMap[instr.dest.regIndex];
-                    LLVMValueRef paramVal = params[allocaCount];
-                    LLVMBuildStore(builder, paramVal, allocaPtr);
-                    allocaCount++;
-                }
+                // if (blockIdx == 0 && 
+                //     instr.op == MirOp.Alloca && 
+                //     allocaCount < paramCount &&
+                //     instr.dest.regIndex < vregMap.length &&
+                //     vregMap[instr.dest.regIndex] !is null)
+                // {
+                //     LLVMValueRef allocaPtr = vregMap[instr.dest.regIndex];
+                //     LLVMValueRef paramVal = params[allocaCount];
+                //     LLVMBuildStore(builder, paramVal, allocaPtr);
+                //     allocaCount++;
+                // }
             }
         }
 

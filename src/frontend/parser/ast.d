@@ -262,7 +262,8 @@ class CallExpr : Node
     Node[] args;
     bool isVarArg;
     int isVarArgAt;
-    bool isExternalCall;
+    bool isExternalCall, isIndirectCall, isRef;
+    FunctionType refType;
 
     this(Node id, Node[] args, Loc loc)
     {
@@ -296,6 +297,7 @@ class CallExpr : Node
 
 class Identifier : Node
 {
+    bool isFunctionReference;
     this(string id, Loc loc)
     {
         this.kind = NodeKind.Identifier;

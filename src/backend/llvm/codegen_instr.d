@@ -96,6 +96,7 @@ mixin template CodeGenInstr() {
                     LLVMBuildRetVoid(builder);
                 break;
 
+            
             case MirOp.Call:
                 // O operando 0 é o CALLEE (quem será chamado)
                 MirValue calleeVal = instr.operands[0];
@@ -104,7 +105,7 @@ mixin template CodeGenInstr() {
                 LLVMTypeRef funcSig;
 
                 string name = calleeVal.constStr;
-                
+
                 if (name in funcMap) 
                 {
                     // Chamada direta - função declarada no módulo
@@ -114,35 +115,62 @@ mixin template CodeGenInstr() {
                 else 
                 {
                     // Chamada por referência - função passada como parâmetro/variável
-                    // Precisamos CARREGAR o ponteiro da função
-                    auto ptrVal = getLLVMValue(calleeVal);
-
-                    // Se getLLVMValue retornou um endereço de stack (alloca), precisamos fazer Load
-                    // Verificamos se é ponteiro para ponteiro (ptr armazenado na stack)
-                    if (LLVMGetTypeKind(LLVMTypeOf(ptrVal)) == LLVMTypeKind.LLVMPointerTypeKind)
+                    LLVMValueRef ptrVal;
+                    if (calleeVal.isConst && calleeVal.isRef)
                     {
-                        // Faz Load para pegar o ponteiro da função armazenado
-                        funcPtr = LLVMBuildLoad2(builder, 
-                            LLVMPointerTypeInContext(context, 0), 
-                            ptrVal, 
-                            "func_ptr_load");
+                        // É uma referência constante (nome de função passada como argumento)
+                        // Mas como não está no funcMap, deve estar em vregMap
+                        if (calleeVal.regIndex < vregMap.length && vregMap[calleeVal.regIndex] !is null)
+                            ptrVal = vregMap[calleeVal.regIndex];
+                        else
+                        {
+                            writeln("ERRO [Call]: Não encontrado em vregMap!");
+                            writeln("vregMap.length = ", vregMap.length);
+                            break;
+                        }
                     }
                     else
-                        // Já é o ponteiro direto
+                        ptrVal = getLLVMValue(calleeVal);
+                    
+                    // Verifica o tipo do valor obtido
+                    auto ptrValType = LLVMTypeOf(ptrVal);
+                    auto ptrValTypeKind = LLVMGetTypeKind(ptrValType);
+
+                    // Se é um ponteiro armazenado na stack (alloca), precisa fazer Load
+                    if (ptrValTypeKind == LLVMTypeKind.LLVMPointerTypeKind)
+                    {
+                        // Verifica se não é já um ponteiro de função global
+                        // (ponteiros de função globais não precisam de Load)
+                        ulong nameLen;
+                        auto ptrName = LLVMGetValueName2(ptrVal, &nameLen);
+                        import std.string : fromStringz;
+                        string ptrNameStr = fromStringz(ptrName).idup;
+
+                        // Se começa com "stack", é uma alloca e precisa de Load
+                        if (ptrNameStr.length >= 5 && ptrNameStr[0..5] == "stack")
+                        {
+                            funcPtr = LLVMBuildLoad2(builder, 
+                                LLVMPointerTypeInContext(context, 0), 
+                                ptrVal, 
+                                "func_ptr_load");
+                        }
+                        else
+                            funcPtr = ptrVal;
+                    }
+                    else
                         funcPtr = ptrVal;
                     
-                    // Extrair a assinatura do tipo
-                    if (auto fnType = cast(FunctionType) calleeVal.type) 
-                    {
+                    if (calleeVal.isRef && calleeVal.refType !is null)
+                        funcSig = toLLVMFunctionType(calleeVal.refType);
+                    else if (auto fnType = cast(FunctionType) calleeVal.type) 
                         funcSig = toLLVMFunctionType(fnType);
-                    }
                     else 
                     {
+                        writeln("ERRO [Call]: Sem tipo de função válido!");
                         writeln("NAME: ", name);
                         writeln("TYPE: ", calleeVal.type.toStr());
-                        writeln(calleeVal.elements);
-                        writeln("Erro Backend: Chamada por referência sem FunctionType.");
-                        writeln("Tipo encontrado: ", calleeVal.type);
+                        writeln("isRef: ", calleeVal.isRef);
+                        writeln("refType: ", calleeVal.refType);
                         break;
                     }
                 }
@@ -156,8 +184,6 @@ mixin template CodeGenInstr() {
                     args ~= getLLVMValue(op);
 
                 const(char)* n = isVoid ? "" : "call_res";
-
-                // Gerar a chamada
                 LLVMValueRef res = LLVMBuildCall2(
                     builder, 
                     funcSig,
@@ -170,7 +196,7 @@ mixin template CodeGenInstr() {
                 if (!isVoid)
                     setReg(instr.dest, res);
                 break;
-
+            
             case MirOp.GetElementPtr:
                 LLVMValueRef baseVal = getLLVMValue(instr.operands[0]);
                 LLVMValueRef[] indices; 

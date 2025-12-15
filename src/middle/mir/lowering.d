@@ -145,7 +145,7 @@ private:
             emit(new MirInstr(MirOp.Alloca, ptrReg));
 
             auto argVal = MirValue.argument(llvmArgIndex, type);
-            // emitStore(argVal, ptrReg);
+            emitStore(argVal, ptrReg);
             varMap[argName] = ptrReg;
         }
 
@@ -566,6 +566,16 @@ private:
     {
         switch (expr.kind)
         {
+            case HirNodeKind.FunctionRef:
+                auto fnRef = cast(HirFunctionRef) expr;
+                MirValue val;
+                val.isConst = true;
+                val.constStr = fnRef.name;
+                val.type = fnRef.type;
+                val.isRef = true;
+                val.refType = cast(FunctionType) fnRef.type;
+                return val;
+
             case HirNodeKind.AddrOfComplex:
                 auto addr = cast(HirAddrOfComplex) expr;
                 // Para &(expressão), calculamos o LValue sem fazer Load
@@ -730,6 +740,8 @@ private:
                     val.isConst = true;
                     val.constStr = load.varName;
                     val.type = t; // O FunctionType
+                    val.isRef = true;  // ADICIONAR
+                    val.refType = t;   // ADICIONAR
                     return val;
                 }
 
@@ -753,11 +765,22 @@ private:
                 auto dest = currentFunc.newReg(call.type);
                 auto instr = new MirInstr(MirOp.Call);
                 instr.dest = dest;
-
                 MirValue funcNameVal; 
-                funcNameVal.isConst = true; 
-                funcNameVal.constStr = call.funcName;
-                funcNameVal.type = call.type;
+                
+                if (call.funcName in varMap)
+                {
+                    funcNameVal = varMap[call.funcName];
+                    funcNameVal.isRef = call.isRef;
+                    funcNameVal.refType = call.refType;
+                }
+                    // O backend já sabe lidar com Load de Alloca("stack...")
+                else {
+                    funcNameVal.isConst = true; 
+                    funcNameVal.constStr = call.funcName;
+                    funcNameVal.type = call.type;
+                    funcNameVal.isRef = call.isRef;
+                    funcNameVal.refType = call.refType;
+                }
                 instr.operands ~= funcNameVal;
 
                 bool injectCount = call.isVarArg && !call.isExternalCall;

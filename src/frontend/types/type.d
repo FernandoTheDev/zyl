@@ -357,6 +357,7 @@ class FunctionType : Type
 {
     Type[] paramTypes;
     Type returnType;
+    string mangled = "";
 
     this(Type[] paramTypes, Type returnType)
     {
@@ -384,6 +385,15 @@ class FunctionType : Type
                 if (!thisParamType.isCompatibleWith(otherParamType, strict))
                     return false;
             }
+
+            // writeln("O: ", otherFunc.mangled);
+            // writeln("M: ", mangled);
+
+            if (otherFunc.mangled == "" && mangled != "")
+                otherFunc.mangled = mangled;
+
+            if (mangled == "" && otherFunc.mangled != "")
+                mangled = otherFunc.mangled;
 
             return true;
         }

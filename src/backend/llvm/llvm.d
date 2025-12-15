@@ -311,3 +311,8 @@ LLVMValueRef LLVMConstArray2(LLVMTypeRef ElementType,
                              size_t Length);
 void LLVMSetValueName2(LLVMValueRef Val, const char *Name, size_t NameLen);
 ulong LLVMStoreSizeOfType(LLVMTargetDataRef td, LLVMTypeRef ty);
+LLVMValueRef LLVMGetNamedFunction(LLVMModuleRef M, const(char)* Name);
+LLVMTypeRef LLVMGlobalGetValueType(LLVMValueRef Global);
+char* LLVMPrintTypeToString(LLVMTypeRef Ty);
+char* LLVMPrintValueToString(LLVMValueRef Val);
+const(char)* LLVMGetValueName2(LLVMValueRef Val, size_t* Length);

@@ -561,6 +561,16 @@ private:
 
     HirNode lowerIdentifier(Identifier ast)
     {
+       if (ast.isFunctionReference)
+        {
+            auto fn = new HirFunctionRef();
+            if (auto fnType = cast(FunctionType) ast.resolvedType)
+                fn.name = fnType.mangled !is null ? fnType.mangled : ast.value.get!string;
+            else
+                fn.name = ast.value.get!string;
+            fn.type = ast.resolvedType;
+            return fn;
+        }
         auto load = new HirLoad();
         load.varName = ast.value.get!string;
         load.type = ast.resolvedType;
@@ -674,30 +684,23 @@ private:
         call.type = ast.resolvedType;
         call.isVarArg = ast.isVarArg;
         call.isExternalCall = ast.isExternalCall;
+        call.refType = ast.refType;
+        call.isRef = ast.isRef;
 
         // Verifica se é chamada de método (MemberExpr)
         if (auto mem = cast(MemberExpr) ast.id)
         {
-            // Precisamos do tipo do alvo para saber o nome da struct
             Type targetType = mem.target.resolvedType;
             string structName;
             
             if (auto st = cast(StructType) targetType) structName = st.name;
             else if (auto pt = cast(PointerType) targetType) structName = (cast(StructType)pt.pointeeType).name;
             
-            // Nome final: Struct_Metodo
-            // structName ~ "_" ~ mem.member
             call.funcName = ast.mangledName;
-            
-            // O primeiro argumento vira o próprio objeto 'u'    
-            // Se o método espera ponteiro (User*) e temos valor (User), pegamos endereço
-            // Se o método espera ponteiro (User*) e temos ponteiro (User*), passamos direto
-            // Simplificação: Assumindo que métodos sempre pedem (User* this)
             HirNode thisArg;
             if (cast(StructType) targetType)
                 thisArg = lowerLValue(mem.target); 
             else
-                // Já é ponteiro
                 thisArg = lowerExpr(mem.target);
             
             call.args ~= thisArg;

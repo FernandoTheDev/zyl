@@ -1,0 +1,16 @@
+struct Multiplier {
+    int factor;
+}
+
+void* multiply(void* item_ptr, void* ctx_ptr) {
+    int* item = (int*) item_ptr
+    Multiplier* m = (Multiplier*) ctx_ptr;
+    
+    *item = *item * m.factor // Usa dado externo!
+    return item
+}
+
+int main() {
+    Multiplier m = Multiplier{10}
+    map(numbers, SIZE, multiply, &m) 
+}

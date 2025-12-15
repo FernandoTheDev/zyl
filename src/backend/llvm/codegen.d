@@ -253,21 +253,16 @@ class LLVMBackend
 
             LLVMTypeRef ty = toLLVMType(val.type);
 
-            // Verifica se é uma referência a função
             if (cast(FunctionType) val.type)
             {
                 string funcName = val.constStr;
+
                 if (funcName in funcMap)
                     return funcMap[funcName];
-
-                // Se não está no funcMap, pode ser um registrador disfarçado
-                // (MIR pode marcar como const mas é na verdade um vreg)
+    
                 if (val.regIndex < vregMap.length && vregMap[val.regIndex] !is null)
                     return vregMap[val.regIndex];
-
-                writeln("Erro: Função '", funcName, "' não encontrada ao tentar obter referência.");
-                writeln("Também não encontrado como registrador: ", val.regIndex);
-                // Retorna um ponteiro nulo em vez de tentar criar uma constante inválida
+    
                 return LLVMConstNull(LLVMPointerTypeInContext(context, 0));
             }
 

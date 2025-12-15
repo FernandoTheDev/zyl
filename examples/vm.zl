@@ -1,6 +1,6 @@
 // virtual machine write in Zyl Programming Language
 import std.libc.io : { printf, exit }
-import std.test : { assert }
+// import std.test : { assert }
 import std.libc.mem : { malloc, free }
 
 enum OpCode {

@@ -5,7 +5,7 @@ import frontend.types.type;
 
 enum HirNodeKind
 {
-    Program, Function, Block,
+    Program, Function, Block, FunctionRef,
     // Declarações
     VarDecl, AssignDecl, IndexExpr, StructDecl, UnionDecl, EnumDecl, AssignExpr,
     // Statements (Comandos)
@@ -216,6 +216,8 @@ class HirCallExpr : HirNode
     int isVarArgAt;
     bool isExternalCall;
     HirNode[] args;
+    bool isRef;
+    FunctionType refType;
     this() { kind = HirNodeKind.CallExpr; }
 }
 
@@ -317,4 +319,10 @@ class HirDefer : HirNode
 class HirAssignExpr : HirNode {
     HirAssignDecl assign;   
     this() { kind = HirNodeKind.AssignExpr; }
+}
+
+class HirFunctionRef : HirNode {
+    string name;        // nome mangled
+    Type type;          // FunctionType
+    this() { kind = HirNodeKind.FunctionRef; }
 }

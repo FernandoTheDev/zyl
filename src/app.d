@@ -38,8 +38,29 @@ void checkErrors(DiagnosticError erro)
 
 void printVersion()
 {
+    enum ORANGE_PLUS = "\033[38;5;208m+\033[0m";
+    enum GRAY_PLUS   = "\033[90m+\033[0m";
+
+    string rawLogo = `
+      ++++++++++++          ++++         
+      +++++++++++           ++++         
+           ++++             ++++         
+   ...   +++++    ++++  ++++++++ ...     
+..      +++++     +++++++++ ++++     ..  
+  ...  +++++        ++++++  ++++ ...     
+      ++++++++++++   ++++   ++++         
+      +++++++++++   ++++     ++          
+                   ++++                  
+                  ++++                                  
+`;
+
+    string renderedLogo = rawLogo
+        .replace("+", ORANGE_PLUS)
+        .replace(".", GRAY_PLUS);
+
+    writeln(renderedLogo);
     writeln("Zyl Compiler v", VERSION);
-    writeln("Built with LDC2 - (c) 2024 Zyl Lang Team");
+    writeln("Built with LDC2 - (c) 2025 Zyl Lang Team");
 }
 
 void printHelp()
@@ -59,6 +80,12 @@ void printHelp()
     writeln("  zyl main.zl");
     writeln("  zyl -O 3 -o myapp main.zl");
     writeln("  zyl --emit-llvm --verbose main.zl");
+}
+
+string extractDir(string path)
+{
+	string dir = dirName(path);
+	return dir == "." || dir == "" ? "." : dir;
 }
 
 void main(string[] args)
@@ -109,21 +136,23 @@ void main(string[] args)
         // --- Pipeline Start ---
 
         string src = readText(config.inputFile);
-        Token[] tokens = new Lexer(config.inputFile, src, ".", error).tokenize();
+        string pathRoot = extractDir(config.inputFile);
+        Token[] tokens = new Lexer(config.inputFile, src, pathRoot, error).tokenize();
         TypeRegistry registry = new TypeRegistry();
 
-        Program program = new Parser(tokens, error, registry).parseProgram();
+        Program program = new Parser(tokens, error, registry, pathRoot).parseProgram();
         checkErrors(error);
 
         Context ctx = new Context(error);
-        
-        new Semantic1(ctx, registry, error).analyze(program);
+        TypeChecker checker = new TypeChecker(ctx, error, registry);
+
+        new Semantic1(ctx, registry, error, pathRoot, checker).analyze(program);
         checkErrors(error);
 
-        new Semantic2(ctx, error, registry).analyze(program);
+        new Semantic2(ctx, error, registry, null, checker).analyze(program);
         checkErrors(error);
 
-        new Semantic3(ctx, error, registry).analyze(program);
+        new Semantic3(ctx, error, registry, pathRoot, checker).analyze(program);
         checkErrors(error);
 
         // program.print();

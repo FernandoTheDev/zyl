@@ -6,3 +6,4 @@ int strcmp(string str1, string str2);
 int strncmp(string str1, string str2, int n);
 string strchr(string str, int c);
 string strstr(string haystack, string needle);
+int atoi(string str);

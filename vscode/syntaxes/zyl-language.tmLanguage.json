@@ -35,7 +35,7 @@
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control.zyl-language",
-				"match": "\\b(import|for|while|do|return|if|else|sizeof|struct|union|enum|int|i32|long|i64|float|f32|double|f64|i1|bool|char|string|void|version|break|continue|type|union|enum|defer|@nomangle)\\b"
+				"match": "\\b(import|for|while|do|return|if|else|sizeof|struct|union|enum|int|i32|long|i64|float|f32|double|f64|i1|bool|char|string|void|version|break|continue|type|union|enum|defer|@nomangle|foreach|in|switch|match|default|case)\\b"
 			}]
 		},
 		"constants": {

@@ -21,7 +21,7 @@ abstract class Symbol
     Loc loc;
     Type type;
     bool isPublic = true; // por padrão, símbolos são públicos
-    bool isExternal = false; // importado de outro módulo
+    bool isExternal, isTemplate;
 
     this(string name, SymbolKind kind, Type type, Loc loc)
     {
@@ -469,7 +469,7 @@ class Context
         else
         {
             if (globalScope.lookupLocal(cloned.name) !is null)
-                return false; // Já existe    
+                return false; // Já existe
             return globalScope.define(cloned);
         }
     }
@@ -542,7 +542,6 @@ class Context
     FunctionSymbol findFunction(string name, Type[] argTypes, Type returnType = null)
     {
         auto candidates = currentScope.resolveFunctions(name);
-
         if (candidates.length == 0) return null;
 
         FunctionSymbol bestMatch = null;

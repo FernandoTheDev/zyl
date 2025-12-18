@@ -1,54 +1,65 @@
 import std.libc.io
 import std.libc.mem
 
+struct DynArrayIterator {
+    DynArray* target; // Referência à coleção
+    int current_idx = 0;  // O cursor é privado desta instância!
+
+    int* opNext(DynArrayIterator* self) {
+        if self.current_idx >= self.target.size { return null }
+        return self.target.data[self.current_idx++]
+    }
+}
+
 struct DynArray {
-    void** data = null;
+    int** data = null;
     int size = 0;
     int idx = 0;
 
-    void* opIndex(DynArray* self, int index) {
+    int* opIndex(DynArray* self, int index) {
         if index >= self.size { exit(1) } // Bounds check simples
         return self.data[index]
     }
 
-    void opIndexAssign(DynArray* self, int index, void* val) {
+    void opIndexAssign(DynArray* self, int index, int* val) {
         if index >= self.size { exit(1) }
         self.data[index] = val
     }
 
-    void opAddAssign(DynArray* self, void* val) {
-        // Lógica de resize/realloc aqui...
+    void opAddAssign(DynArray* self, int* val) {
         self.data[self.size++] = val
     }
 
-    DynArray* opIter(DynArray* self) {
-        return self
+    DynArrayIterator opIter(DynArray* self) {
+        // Cria um iterador novo apontando para o início (0)
+        return DynArrayIterator{ self, 0 }
+        // return self
     }
 
-    void* opNext(DynArray* self) {
+    int* opNext(DynArray* self) {
         if self.idx >= self.size { return null }
-        void* ptr = self.data[self.idx++]
-        return ptr
+        return self.data[self.idx++]
     }
 }
 
 int main() {
-    void* data = malloc(100)
-    DynArray arr = DynArray{&data}
+    int** data = (int**) malloc(100 * sizeof int*)
+    defer free(data)
+    
+    DynArray arr = DynArray{data, 0, 0}
+    
     int x = 69
-    arr += (void*)&x
+    int z = 133
+    int m = 420
+    arr += &x
+    arr += &z
+    arr += &m
 
-    /*    
-        foreach (x in arr) {
-            printf("%d\n", *(int*)x)
-        }
-    */
-
-    DynArray* __iter = arr.opIter()
-    void* __val = null
-
-    while (__val = __iter.opNext()) != null
-        printf("%d\n", *(int*)__val)
+    foreach x in arr {
+        foreach y in arr
+            printf("Y: %d\n", *y)
+        printf("X: %d\n", *x)
+    }
 
     return 0
 }

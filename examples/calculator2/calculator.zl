@@ -1,0 +1,214 @@
+import std.libc.string : { atoi }
+import std.libc.io
+import std.string
+import std.vector
+import std.arena
+
+// LEXER
+
+enum TokenKind {
+    Identifier, // ID
+    Int,
+    Float,
+    
+    LParen, // (
+    RParen, // )
+    Modulo, // %
+    Minus, // -
+    Slash, // /
+    Plus, // +
+    Star, // *
+
+    Eof // EndOfFile
+}
+
+union Value {
+    string s;
+    float f;
+    char c;
+    int i;
+}
+
+struct Token
+{
+    TokenKind kind;
+    Value value;
+
+    string getKindName(Token* t) {
+        switch t.kind {
+            case TokenKind.Plus:       return "Plus"
+            case TokenKind.Minus:      return "Minus"
+            case TokenKind.Star:       return "Star"
+            case TokenKind.Slash:      return "Slash"
+            case TokenKind.Modulo:     return "Modulo"
+            case TokenKind.LParen:     return "LParen"
+            case TokenKind.RParen:     return "RParen"
+            case TokenKind.Int:        return "Int"
+            case TokenKind.Float:      return "Float"
+            case TokenKind.Identifier: return "Identifier"
+            case TokenKind.Eof:        return "EOF"
+        }
+        return "Unknown"
+    }
+
+    string getValueStr(Token* t, Arena* a) {
+    char* buffer = (char*) a.alloc(64)
+    
+    switch t.kind {
+        case TokenKind.Plus:
+        case TokenKind.Minus:
+        case TokenKind.Star:
+        case TokenKind.Slash:
+        case TokenKind.Modulo:
+        case TokenKind.LParen:
+        case TokenKind.RParen:
+            sprintf(buffer, "%c", t.value.c)
+            return buffer
+        
+        case TokenKind.Int:
+            sprintf(buffer, "%d", t.value.i)
+            return buffer
+        
+        case TokenKind.Float:
+            sprintf(buffer, "%.2f", t.value.f)
+            return buffer
+        
+        case TokenKind.Identifier:
+            return t.value.s
+        
+        case TokenKind.Eof:
+            return "<end>"
+    }
+    return "<?>"
+}
+
+    void print(Token* t, Arena* a) {
+        printf("%-12s %s\n", t.getKindName(), t.getValueStr(a))
+    }
+}
+
+type TK = Vector!(Token)
+
+struct Lexer {
+    // source code
+    String* source = null
+    // len of source
+    int len = 0
+    // pos (offset)
+    int pos = 0
+    // tokens
+    TK* tokens = null
+    // arena allocator
+    Arena* arena = null
+    
+    void init(Lexer* self) {
+        self.tokens = (Vector!(Token)*) self.arena.alloc(sizeof Vector!(Token));
+        self.tokens.init(self.arena, 1024)
+    }
+
+    char current(Lexer* self) {
+        if self.pos >= self.len 
+            return '\0'
+        return self.source.str[self.pos]
+    }
+
+    char peek(Lexer* self, int offset) {
+        int newPos = self.pos + offset
+        if newPos >= self.len
+            return '\0'
+        return self.source.str[newPos]
+    }
+
+    bool isAlpha(Lexer* self, char ch) {
+        return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_' || ch == '@'
+    }
+
+    bool isNum(Lexer* self, char ch) {
+        return ch >= '0' && ch <= '9'
+    }
+
+    bool isWhitespace(Lexer* self, char ch) {
+        return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
+    }
+
+    void createToken(Lexer* self, Value val, TokenKind kind) {
+        self.tokens.push(Token{kind, val});
+    }
+
+    Value mkVal(Lexer* self, int i) {
+        Value val;
+        val.i = i
+        return val
+    }
+
+    Value mkVal(Lexer* self, char ch) {
+        Value val;
+        val.c = ch
+        return val
+    }
+    
+    Value mkVal(Lexer* self, string s) {
+        Value val;
+        val.s = s
+        return val
+    }
+
+    bool isSymbol(Lexer* self, char ch) {
+        switch ch {
+            case '+':  self.createToken(self.mkVal(ch), TokenKind.Plus)    return true
+            case '-':  self.createToken(self.mkVal(ch), TokenKind.Minus)   return true
+            case '*':  self.createToken(self.mkVal(ch), TokenKind.Star)    return true
+            case '/':  self.createToken(self.mkVal(ch), TokenKind.Slash)   return true
+            case '%':  self.createToken(self.mkVal(ch), TokenKind.Modulo)  return true
+            case '(':  self.createToken(self.mkVal(ch), TokenKind.LParen)  return true
+            case ')':  self.createToken(self.mkVal(ch), TokenKind.RParen)  return true
+        }
+        return false
+    }
+
+    void tokenize(Lexer* self) {
+        String buff = String{"", self.arena}
+        
+        while self.pos < self.len {
+            char c = self.current()
+
+            if self.isWhitespace(c) || self.isSymbol(c) { self.pos++ continue }
+
+            if self.isNum(c) {
+                while self.isNum(self.current()) {
+                    buff += self.current()
+                    self.pos++
+                }
+                self.createToken(self.mkVal(atoi(buff.str)), TokenKind.Int)
+                buff.clear()
+                continue
+            }
+
+            if self.isAlpha(c) {
+                while self.isAlpha(self.current()) {
+                    buff += self.current()
+                    self.pos++
+                }   
+                self.createToken(self.mkVal(buff.str), TokenKind.Identifier)
+                buff.clear()
+                continue
+            }
+
+            printf("Char: %c\n", c)
+            error("Error")
+        }
+        self.createToken(self.mkVal(null), TokenKind.Eof)
+    }
+}
+
+// PARSER
+
+enum NodeKind {
+    Program
+    
+    IntLit
+    FloatLit
+    Identifier
+    
+    BinaryExpr
+}

@@ -1,0 +1,42 @@
+import std.libc.io : { printf }
+import std.libc.mem : { malloc, realloc, free }
+
+struct Vector!(T) {
+    T* data = null
+    int size = 0
+    int capacity = 0
+
+    void push(Vector!(T)* self, T value) {
+        if self.size >= self.capacity {
+            if (self.capacity == 0)
+                self.capacity = 4
+            else
+                self.capacity = self.capacity * 2
+            int new_cap = self.capacity
+            self.data = (T*) realloc(self.data, (sizeof T) * new_cap)
+            self.capacity = new_cap
+        }
+        self.data[self.size] = value
+        self.size++
+    }
+    
+    T opIndex(Vector!(T)* self, int idx) {
+        return self.data[idx]
+    }
+
+    void destroy(Vector!(T)* self) {
+        if self.data != null free(self.data)
+    }
+}
+
+int main() {
+    Vector!int v = Vector!int{}
+    defer v.destroy()
+
+    v.push(10)
+    v.push(20)
+    v.push(30)
+
+    printf("%d\n", v[1])
+    return 0
+}

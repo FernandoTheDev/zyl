@@ -1,0 +1,44 @@
+import std.libc.io : { printf }
+import std.libc.mem : { malloc, free }
+
+struct HashMap!(K, V) {
+    K key;
+    V value;
+
+    V getValue(HashMap!(K, V)* self) {
+        return self.value
+    }
+}
+
+struct Vector!(T) {
+    T* data;
+    int size;
+    int capacity;
+    
+    void push(Vector!(T)* self, T value) { self.data[self.capacity++] = value }
+    T get(Vector!(T)* self, int idx) { return self.data[idx] }
+}
+
+int main() {
+    HashMap!(string, int) map1 = HashMap!(string, int){}
+    map1.key = "Fernando"
+    map1.value = 17
+
+    printf("%d ", map1.getValue())
+
+    HashMap!(int, char) map2 = HashMap!(int, char){}
+    map2.key = 69
+    map2.value = 65
+
+    printf("%c ", map2.getValue())
+
+    int* data = (int*) malloc((sizeof int) * 10)
+    defer free(data)
+
+    Vector!int v = Vector!int{data}
+    v.push(10)
+
+    printf("%d\n", v.get(0))
+
+    return 0
+}

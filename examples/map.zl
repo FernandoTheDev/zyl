@@ -1,116 +1,43 @@
 import std.libc.io : { printf }
 import std.arena
-
-type _fn = (void*, void*): void*
-
-void* sum(void* x, void* ctx) {
-    int* result = (int*) x;
-    *result = *result * 2;
-    return result
-}
-
-struct Multiplier {
-    int factor;
-}
-
-void* multiply(void* item_ptr, void* ctx_ptr) {
-    int* item = (int*) item_ptr
-    Multiplier* m = (Multiplier*) ctx_ptr;
-    
-    *item = *item * m.factor // Usa dado externo!
-    return item
-}
-
-void map(void** numbers, int len, _fn fn, void* ctx) {
-    for int i = 0; i < len; i++
-        numbers[i] = fn(numbers[i], ctx)
-}
-
-// Predicado: Retorna 1 (true) ou 0 (false)
-type _predicate = (void*): bool
-
-// Filter: Retorna um NOVO array contendo apenas itens que passaram no teste
-// Precisamos retornar o novo tamanho também, então talvez retornar uma Struct Array?
-struct ArrayView {
-    void** data;
-    int length;
-}
-
-ArrayView filter(void** input, int len, _predicate pred, Arena* arena) {
-    void** temp = (void**) arena.alloc((sizeof void*) * len)
-    int count = 0
-    for int i = 0; i < len; i++ {
-        if pred(input[i]) {
-            temp[count] = input[i]
-            count++
-        }
-    }
-    return ArrayView{temp, count}
-}
-
-bool is_greater_than_500(void* item_ptr) {
-    int val = *(int*)item_ptr
-    return val > 500
-}
-
-type _reducer = (void*, void*, void*): void*
-
-void* reduce(void** input, int len, _reducer fn, void* initial, void* ctx) {
-    void* acc = initial
-    for int i = 0; i < len; i++
-        acc = fn(acc, input[i], ctx)
-    return acc
-}
-
-// Reducer de Soma
-// Note: Como void* não guarda valor, o 'acc' aqui será um ponteiro para um int que vamos atualizando.
-void* sum_reducer(void* acc_ptr, void* item_ptr, void* ctx) {
-    int* acc = (int*) acc_ptr
-    int* item = (int*) item_ptr;
-    
-    *acc = *acc + *item // Atualiza o valor apontado pelo acumulador
-    return acc_ptr      // Retorna o mesmo ponteiro
-}
+import std.map
 
 int main() {
+    printf("=== Teste HashMap!(string, double) ===\n")
+
     Arena arena = Arena{}
-    defer arena.destroy()
     arena.create(1024)
-    int SIZE = 5
-    void** numbers = (void**) arena.alloc((sizeof void*) * SIZE)
-    
-    int a1 = 10
-    int b = 20
-    int c = 30
-    int d = 40
-    int e = 50
-    
-    numbers[0] = (void*)&a1
-    numbers[1] = (void*)&b
-    numbers[2] = (void*)&c
-    numbers[3] = (void*)&d
-    numbers[4] = (void*)&e
+    defer arena.destroy()
 
-    map(numbers, SIZE, sum, null)
-    
-    Multiplier m = Multiplier{10}
-    map(numbers, SIZE, multiply, &m)
+    HashMap!(string, double) map = HashMap!(string, double){}
+    map.init(&arena, 16)
 
-    for int i = 0; i < SIZE; i++
-        printf("%d\n", *(int*)numbers[i])
+    map.put("Pi", 3.14159)
+    map.put("Euller", 2.718)
+    map.put("Dolar", 5.85)
 
-    ArrayView result = filter(numbers, SIZE, is_greater_than_500, &arena)
-    printf("(> 500): %d itens\n", result.length)
+    double* val = map.get("Pi")
+    if val != null {
+        printf("Pi: %f\n", *val)
+    }
 
-    for int i = 0; i < result.length; i++
-        printf("%d\n", *(int*)result.data[i])
+    val = map.get("Dolar")
+    if val != null {
+        printf("Dolar: %f\n", *val)
+    }
 
-    int total = 0 
-    
-    // Reduz o array filtrado para um único inteiro
-    reduce(result.data, result.length, sum_reducer, &total, null)
+    // Update
+    map.put("Dolar", 6.00)
+    val = map.get("Dolar")
+    if val != null {
+        printf("Dolar (Atualizado): %f\n", *val)
+    }
 
-    printf("Total: %d\n", total) // 2400
+    // Non-existent
+    val = map.get("Real")
+    if val == null {
+        printf("Real nao encontrado (correto)\n")
+    }
 
     return 0
 }

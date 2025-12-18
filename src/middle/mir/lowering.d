@@ -272,12 +272,137 @@ private:
         }
     }
 
+    void lowerSwitch(HirSwitch stmt)
+    {
+        auto condVal = lowerExpr(stmt.condition);
+
+        string endLabel = currentFunc.uniqueBlockName("switch_end");
+        string defaultLabel = null;
+
+        struct CaseInfo {
+            string label;
+            HirCaseStmt caseStmt;
+        }
+
+        CaseInfo[] cases;
+
+        foreach (i, caseStmt; stmt.cases)
+        {
+            if (caseStmt.isDefault)
+                defaultLabel = currentFunc.uniqueBlockName("switch_default");
+            else
+            {
+                string label = currentFunc.uniqueBlockName("switch_case");
+                cases ~= CaseInfo(label, caseStmt);
+            }
+        }
+
+        if (defaultLabel is null)
+            defaultLabel = endLabel;
+
+        string currentCheckLabel = currentFunc.uniqueBlockName("switch_check");
+        emitBr(currentCheckLabel);
+
+        foreach (i, caseInfo; cases)
+        {
+            auto checkBB = new MirBasicBlock(currentCheckLabel);
+            currentFunc.blocks ~= checkBB;
+            currentBlock = checkBB;
+
+            string nextCheckLabel;
+            if (i + 1 < cases.length)
+                nextCheckLabel = currentFunc.uniqueBlockName("switch_check");
+            else
+                nextCheckLabel = defaultLabel;
+
+            bool firstValue = true;
+            foreach (j, value; caseInfo.caseStmt.values)
+            {
+                auto caseVal = lowerExpr(value);
+
+                auto cmpReg = currentFunc.newReg(new PrimitiveType(BaseType.Bool));
+                auto cmpInstr = new MirInstr(MirOp.ICmp);
+                cmpInstr.dest = cmpReg;
+                cmpInstr.operands = [condVal, caseVal, MirValue.stringLit("==", null)];
+                emit(cmpInstr);
+
+                if (j == cast(int) caseInfo.caseStmt.values.length - 1)
+                {
+                    // Último valor: vai pro case ou próximo check
+                    auto br = new MirInstr(MirOp.CondBr);
+                    br.operands = [cmpReg, MirValue.block(caseInfo.label), MirValue.block(nextCheckLabel)];
+                    emit(br);
+                }
+                else
+                {
+                    string continueLabel = currentFunc.uniqueBlockName("switch_or");
+                    auto br = new MirInstr(MirOp.CondBr);
+                    br.operands = [cmpReg, MirValue.block(caseInfo.label), MirValue.block(continueLabel)];
+                    emit(br);
+
+                    auto orBB = new MirBasicBlock(continueLabel);
+                    currentFunc.blocks ~= orBB;
+                    currentBlock = orBB;
+                }
+            }
+            currentCheckLabel = nextCheckLabel;
+        }
+
+        foreach (i, caseInfo; cases)
+        {
+            auto caseBB = new MirBasicBlock(caseInfo.label);
+            currentFunc.blocks ~= caseBB;
+            currentBlock = caseBB;
+
+            loopStack ~= LoopContext("", endLabel, deferStack.length);
+            lowerBlock(caseInfo.caseStmt.body);
+            loopStack.length--;
+
+            if (!blockHasTerminator(currentBlock))
+            {
+                if (i + 1 < cases.length)
+                    emitBr(cases[i + 1].label);
+                else
+                    emitBr(defaultLabel != endLabel ? defaultLabel : endLabel);
+            }
+        }
+
+        if (defaultLabel != endLabel)
+        {
+            auto defaultBB = new MirBasicBlock(defaultLabel);
+            currentFunc.blocks ~= defaultBB;
+            currentBlock = defaultBB;
+
+            foreach (caseStmt; stmt.cases)
+            {
+                if (caseStmt.isDefault)
+                {
+                    loopStack ~= LoopContext("", endLabel, deferStack.length);
+                    lowerBlock(caseStmt.body);
+                    loopStack.length--;
+                    break;
+                }
+            }
+
+            if (!blockHasTerminator(currentBlock))
+                emitBr(endLabel);
+        }
+
+        auto endBB = new MirBasicBlock(endLabel);
+        currentFunc.blocks ~= endBB;
+        currentBlock = endBB;
+    }
+
     void lowerStmt(HirNode stmt) 
     {
         if (stmt is null) return;
 
         switch (stmt.kind) 
         {
+            case HirNodeKind.Switch:
+                lowerSwitch(cast(HirSwitch) stmt);
+                break;
+
             case HirNodeKind.Defer:
                 addDefer((cast(HirDefer)stmt).value);
                 break;
@@ -336,6 +461,10 @@ private:
 
             case HirNodeKind.For:
                 lowerFor(cast(HirFor) stmt);
+                break;
+
+            case HirNodeKind.Block:
+                lowerBlock(cast(HirBlock) stmt);
                 break;
 
             case HirNodeKind.While:
@@ -739,9 +868,9 @@ private:
                     MirValue val;
                     val.isConst = true;
                     val.constStr = load.varName;
-                    val.type = t; // O FunctionType
-                    val.isRef = true;  // ADICIONAR
-                    val.refType = t;   // ADICIONAR
+                    val.type = t;
+                    val.isRef = true;
+                    val.refType = t;
                     return val;
                 }
 
@@ -773,7 +902,6 @@ private:
                     funcNameVal.isRef = call.isRef;
                     funcNameVal.refType = call.refType;
                 }
-                    // O backend já sabe lidar com Load de Alloca("stack...")
                 else {
                     funcNameVal.isConst = true; 
                     funcNameVal.constStr = call.funcName;
@@ -784,7 +912,7 @@ private:
                 instr.operands ~= funcNameVal;
 
                 bool injectCount = call.isVarArg && !call.isExternalCall;
-                int splitIndex = call.isVarArgAt; // Índice onde começa o '...' na definição
+                int splitIndex = call.isVarArgAt;
 
                 for (int i = 0; i < call.args.length; i++) 
                 {
@@ -1221,7 +1349,6 @@ private:
             
             // O resultado de lowerLValue deve ser sempre um PONTEIRO para o elemento
             auto dest = currentFunc.newReg(new PointerType(idx.type));
-            
             auto instr = new MirInstr(MirOp.GetElementPtr);
             instr.dest = dest;
             instr.operands = [basePtr, indexVal];

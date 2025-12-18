@@ -9,6 +9,9 @@ class TypeChecker
     DiagnosticError error;
     FunctionAnalyzer funcAnalyzer;
     TypeRegistry registry;
+    FuncDecl[] funcs;
+    StructDecl[] structs;
+    StructDecl[] qeue;
 
     this(Context ctx, DiagnosticError error, TypeRegistry registry)
     {
@@ -39,6 +42,8 @@ class TypeChecker
 
     bool checkType(Type left, Type right, Loc loc, bool strict = true)
     {
+        if (left is null || right is null)
+            return false;
         if (!left.isCompatibleWith(right, strict))
         {
             reportError(format("Incompatible types, expected '%s' received '%s'.", left.toStr(), right.toStr()), loc);
@@ -150,6 +155,9 @@ private:
         if (targetType == sourceType)
             return node;
 
+        if (targetType is null)
+            return node;
+
         if (!targetType.isCompatibleWith(sourceType, false))
             return node;
         
@@ -187,13 +195,31 @@ private:
 
     Type checkStructLit(StructLit lit)
     {
-        // Busca a struct
         StructSymbol structSym = ctx.lookupStruct(lit.structName);
         if (structSym is null)
         {
             reportError(format("Struct '%s' not found", lit.structName), lit.loc);
             lit.resolvedType = new PrimitiveType(BaseType.Any);
             return new PrimitiveType(BaseType.Any);
+        }
+
+        if (lit.isTemplate || lit.templateType.length > 0)
+        {
+            if (!structSym.isTemplate) {
+                reportError(format("Struct '%s' is not a template.", lit.structName), lit.loc);
+                return new PrimitiveType(BaseType.Any);
+            }
+
+            auto instantiator = new TemplateInstantiator(ctx, error, registry, this);
+            StructSymbol concreteSym = instantiator.instantiateStruct(lit, structSym);
+            
+            if (concreteSym is null) return new PrimitiveType(BaseType.Any);
+
+            lit.structName = concreteSym.name;
+            lit.isTemplate = false;
+            lit.templateType = [];
+            
+            structSym = concreteSym;
         }
         
         StructType structType = structSym.structType;
@@ -370,10 +396,8 @@ private:
 
         Type targetType = checkExpression(expr.target);
 
-        // 1. Acesso a campo de struct
         if (StructType structType = cast(StructType) targetType)
         {
-            // Verifica se o campo existe
             if (!structType.hasField(expr.member))
             {
                 structError(structType, expr.member, expr.loc);
@@ -397,7 +421,6 @@ private:
                     structError(structType, expr.member, expr.loc);
                     return new PrimitiveType(BaseType.Any);
                 }
-
                 Type fieldType = structType.getFieldType(expr.member);
                 expr.resolvedType = fieldType;
                 return fieldType;
@@ -509,7 +532,7 @@ private:
     {
         string id = ident.value.get!string;
         Symbol sym = ctx.lookup(id);
-    
+
         if (sym is null)
         {
             reportError(format("'%s' was not declared.", id), ident.loc);
@@ -814,6 +837,36 @@ private:
 
     Type checkCallExpr(CallExpr expr)
     {
+        if (expr.isTemplate || expr.templateType.length > 0)
+        {
+            string id = "";
+            if (auto ident = cast(Identifier) expr.id) id = ident.value.get!string;
+            else {
+                reportError("Template call must be on an identifier.", expr.loc);
+                return new PrimitiveType(BaseType.Any);
+            }
+
+            Symbol sym = ctx.lookup(id);
+            if (!sym || !sym.isTemplate) {
+                reportError(format("Template function '%s' not found.", id), expr.loc);
+                return new PrimitiveType(BaseType.Any);
+            }
+
+            // === DELEGAÇÃO PARA O NOVO ARQUIVO ===
+            auto instantiator = new TemplateInstantiator(ctx, error, registry, this);
+            FunctionSymbol concreteSym = instantiator.instantiate(expr, cast(FunctionSymbol) sym);
+            
+            if (!concreteSym) return new PrimitiveType(BaseType.Any);
+
+            // Redireciona a chamada para a função concreta criada
+            if (auto ident = cast(Identifier) expr.id) {
+                ident.value = concreteSym.name; // "cast" vira "cast_int_double"
+                ident.resolvedType = null;
+            }
+            expr.isTemplate = false;
+            expr.templateType = [];
+        }
+
         // Caso 1: Chamada de Método (obj.metodo())
         if (MemberExpr mem = cast(MemberExpr) expr.id)
         {                            
@@ -1048,6 +1101,16 @@ private:
             if (primitive.baseType == BaseType.String) {
                 expr.resolvedType = new PrimitiveType(BaseType.Char);
                 return new PrimitiveType(BaseType.Char);
+            }
+        }
+
+        if (StructType st = cast(StructType) targetType)
+        {
+            if (st.hasMethod("opIndex"))
+            {
+                StructMethod* method = st.getMethod("opIndex");
+                expr.mangledName = method.funcDecl.mangledName;
+                return method.funcDecl.resolvedType;
             }
         }
 

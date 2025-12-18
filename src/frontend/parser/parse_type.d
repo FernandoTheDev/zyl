@@ -14,6 +14,9 @@ mixin template ParseType()
         if (this.check(TokenKind.Star))
             return this.parsePointerType(type);
 
+        if (this.check(TokenKind.Bang))
+            return this.parseGenericType(type);
+
         return type;
     }
 
@@ -53,6 +56,24 @@ mixin template ParseType()
         if (this.check(TokenKind.Star))
             return this.parsePointerType(type);
 
+        if (this.check(TokenKind.Bang))
+            return this.parseGenericType(type);
+
+        return type;
+    }
+
+    // List!(int, int) | Vector!string
+    TypeExpr parseGenericType(TypeExpr baseType)
+    {
+        TypeExpr type = new GenericTypeExpr(baseType, this.parseTemplate(), this.getLoc(baseType.loc, 
+            this.previous().loc));
+
+        if (this.check(TokenKind.LBracket))
+            return this.parseArrayType(type);
+
+        if (this.check(TokenKind.Star))
+            return this.parsePointerType(type);
+        
         return type;
     }
 
@@ -68,6 +89,9 @@ mixin template ParseType()
 
         if (this.check(TokenKind.Star))
             return this.parsePointerType(type);
+
+        if (this.check(TokenKind.Bang))
+            return this.parseGenericType(type);
 
         return type;
     }

@@ -1,0 +1,17 @@
+import std.libc.io : { printf }
+
+U cast!(T, U)(T value) {
+    return (U) value
+}
+
+T sum!T(T x, T y) {
+    return x + y
+}
+
+int main() {
+    char y = cast!(int, char)(65) // 'A'
+    double a = cast!(float, double)(10F) // 10.0
+    int z = cast!(double, int)(10.0) // 10
+    printf("%c %f %d %d\n", y, a, z, sum!int(60, 9))
+    return 0
+}

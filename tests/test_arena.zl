@@ -1,0 +1,52 @@
+import std.libc.io : { printf }
+import std.arena
+
+struct Point {
+    int x = 0
+    int y = 0
+    double z = 0.0
+}
+
+int main() {
+    Arena arena = Arena{}
+    defer arena.destroy()
+    arena.create(1024 * 1024)
+
+    int* nums = (int*) arena.alloc((sizeof int) * 5)
+    if nums != null {
+        for int i = 0; i < 5; i++
+            nums[i] = i * 10
+
+        printf("Integers: ")
+        for int i = 0; i < 5; i++
+            printf("%d ", nums[i])
+        printf("\n")
+    }
+
+    string str = (string) arena.alloc(20)
+    if str != null {
+        str = "Hello Connor!"
+        printf("String: %s\n", str)
+    }
+
+    Point* p = (Point*) arena.alloc(sizeof Point)
+    if str != null {
+        p.x = 10
+        p.y = 20
+        p.z = 3.14159
+        printf("Points: (%d, %d, %f)\n", p.x, p.y, p.z)
+    }
+
+    printf("Testing resize...\n")
+    int* large_array = (int*) arena.alloc((sizeof int) * 500000)
+    if large_array != null {
+        large_array[0] = 42
+        large_array[499999] = 100
+        printf("Large allocation succeeded! First: %d, Last %d\n", large_array[0], large_array[499999])
+        printf("Arena after resize: %d / %d\n", arena.offset, arena.size)
+    }
+
+    printf("Arena usage: %d / %d\n", arena.offset, arena.size)
+
+    return 0
+}

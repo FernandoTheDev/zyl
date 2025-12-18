@@ -1,0 +1,36 @@
+import std.io : { error }
+import std.libc.file : { fopen, fclose, ftell, rewind, fread, fseek }
+import std.arena
+
+bool fileExist(string filename) {
+    void* f = fopen(filename, "r")
+    if f == null
+        return false
+    fclose(f)
+    return true
+}
+
+char* readFile(string filename, Arena* arena) {
+    int SEEK_END = 2
+    void* f = fopen(filename, "rb")
+
+    if f == null
+        error("Failed to open file during reading.")
+
+    fseek(f, 0, SEEK_END)
+    int size = ftell(f)
+    rewind(f)
+
+    char* buffer = (char*) arena.alloc(size + 1)
+
+    if buffer == null {
+        fclose(f)
+        error("The buffer was not allocated.")
+    }
+
+    fread(buffer, 1, size, f)
+    buffer[size] = '\0'  // Null terminator
+    fclose(f)
+
+    return buffer
+}

@@ -1,0 +1,174 @@
+import std.libc.string : { atoi }
+import frontend.lexer.token
+import std.string
+import std.vector
+import std.arena
+import std.map
+
+type TK = Vector!(Token)
+type MAP = HashMap!(string, int)
+
+struct Lexer {
+    // source code
+    String* source = null
+    // len of source
+    int len = 0
+    // pos (offset)
+    int pos = 0
+    // tokens
+    TK* tokens = null
+    // arena allocator
+    Arena* arena = null
+    // symbols map
+    MAP* symbols = null;
+    // keywords map
+    MAP* keywords = null;
+
+    void init(Lexer* self) {
+        self.tokens = (Vector!(Token)*) self.arena.alloc(sizeof Vector!(Token));
+        self.tokens.init(self.arena, 1024)
+        self.symbols = (HashMap!(string, int)*) self.arena.alloc(sizeof HashMap!(string, int));
+        self.keywords = (HashMap!(string, int)*) self.arena.alloc(sizeof HashMap!(string, int));
+        
+        self.symbols.arena = self.arena;
+        self.keywords.arena = self.arena;
+        
+        self.symbols.init(self.arena, 20);
+        self.keywords.init(self.arena, 20);
+        
+        self.initSymbols()
+        self.initKeywords()
+    }
+
+    void initSymbols(Lexer* self) {
+        self.symbols.put("+", TokenKind.Plus);
+        self.symbols.put("*", TokenKind.Star);
+        self.symbols.put(")", TokenKind.RParen);
+        self.symbols.put("(", TokenKind.LParen);
+        self.symbols.put("}", TokenKind.RBrace);
+        self.symbols.put("{", TokenKind.LBrace);
+        self.symbols.put(",", TokenKind.Comma);
+        self.symbols.put(".", TokenKind.Dot);
+    }
+
+    void initKeywords(Lexer* self) {
+        self.keywords.put("return", TokenKind.Return);
+        self.keywords.put("import", TokenKind.Import);
+    }
+
+    char current(Lexer* self) {
+        if self.pos >= self.len 
+            return '\0'
+        return self.source.str[self.pos]
+    }
+
+    char peek(Lexer* self, int offset) {
+        int newPos = self.pos + offset
+        if newPos >= self.len
+            return '\0'
+        return self.source.str[newPos]
+    }
+
+    bool isAlpha(Lexer* self, char ch) {
+        return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_' || ch == '@'
+    }
+
+    bool isNum(Lexer* self, char ch) {
+        return ch >= '0' && ch <= '9'
+    }
+
+    bool isWhitespace(Lexer* self, char ch) {
+        return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
+    }
+
+    void createToken(Lexer* self, Value val, TokenKind kind) {
+        self.tokens.push(Token{kind, val, null});
+    }
+
+    Value mkVal(Lexer* self, int i) {
+        Value val;
+        val.i = i
+        return val
+    }
+
+    Value mkVal(Lexer* self, string s) {
+        Value val;
+        val.s = s
+        return val
+    }
+
+    Value mkVal(Lexer* self, char c) {
+        Value val;
+        val.c = c
+        return val
+    }
+
+    Value mkVal(Lexer* self, void* ptr) {
+        Value val;
+        if ptr == null
+            val.c = '\0'
+        else
+            val.ptr = ptr
+        return val
+    }
+
+    void createStr(Lexer* self, char** bff, char c) {
+        *bff[0] = c;
+        *bff[1] = '\0'
+    }
+
+    void tokenize(Lexer* self) {
+        char* c2s = self.arena.alloc(2)
+        int* kind;
+        String buff = String{"", self.arena}
+        
+        while self.pos < self.len {
+            char c = self.current()
+
+            if self.isWhitespace(c) { self.pos++ continue }
+
+            if self.isNum(c) {
+                while self.isNum(self.current()) {
+                    buff += self.current()
+                    self.pos++
+                }
+                self.createToken(self.mkVal(atoi(buff.str)), TokenKind.I32)
+                buff.clear()
+                continue
+            }
+
+            self.createStr(&c2s, c)
+            
+            kind = self.symbols.get(c2s)
+            if kind != null {
+                // is a symbol
+                self.createToken(self.mkVal(c), *kind)
+                self.pos++
+                continue
+            }
+
+            if self.isAlpha(c) {
+                while self.isAlpha(self.current()) {
+                    buff += self.current()
+                    self.pos++
+                }
+
+                kind = self.keywords.get(buff.str)
+                if kind != null {
+                    // is a keyword
+                    self.createToken(self.mkVal(buff.str), *kind)
+                    buff.clear()
+                    continue
+                }
+                    
+                // identifier
+                self.createToken(self.mkVal(buff.str), TokenKind.Identifier)
+                buff.clear()
+                continue
+            }
+
+            error("Error")
+        }
+        self.createToken(self.mkVal(null), TokenKind.Eof)
+    }
+}

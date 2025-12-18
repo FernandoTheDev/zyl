@@ -1,0 +1,53 @@
+import std.libc.io : { printf }
+
+int mandelbrot(double x0, double y0, int max_iter) {
+    double x = 0.0
+    double y = 0.0
+    int iteration = 0
+    
+    while iteration < max_iter {
+        double x2 = x * x
+        double y2 = y * y
+        
+        if x2 + y2 > 4.0
+            return iteration
+        
+        double xtemp = x2 - y2 + x0
+        y = 2.0 * x * y + y0
+        x = xtemp
+        
+        iteration = iteration + 1
+    }
+    
+    return max_iter
+}
+
+void render(int width, int height, int max_iter) {
+    double xmin = -2.5
+    double xmax = 1.0
+    double ymin = -1.0
+    double ymax = 1.0
+    
+    for int row = 0; row < height; row++ {
+        for int col = 0; col < width; col++ {
+            double x0 = xmin + (xmax - xmin) * (double)col / (double)width
+            double y0 = ymin + (ymax - ymin) * (double)row / (double)height
+            
+            int iter = mandelbrot(x0, y0, max_iter)
+            
+            if iter == max_iter
+                printf("*")
+            else if iter > max_iter / 2
+                printf("+")
+            else if iter > max_iter / 4
+                printf(".")
+            else
+                printf(" ")
+        }
+        printf("\n")
+    }
+}
+
+void main(int argc, char** argv) {
+    render(1000, 1000, 1000)
+}

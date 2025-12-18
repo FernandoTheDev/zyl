@@ -1,0 +1,22 @@
+import std.libc.io : { printf }
+
+enum Colors {
+    Red    // 0
+    Blue   // 1
+    Green  // 2
+    Yellow // 3
+}
+
+void main() {
+    Colors color = Colors.Blue
+    switch color {
+        case Colors.Red:  printf("Red\n")
+        case Colors.Blue, Colors.Yellow:
+            printf("Blue || Yellow\n")
+            break
+        default: {
+            printf("well well well\n")
+            printf("color = %d\n", color)
+        }
+    }
+}

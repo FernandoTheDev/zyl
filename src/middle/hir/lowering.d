@@ -17,14 +17,21 @@ class AstLowerer {
 
         // Primeiro pass: registra structs e calcula layouts
         foreach (node; ast.body)
-            if (node.kind == NodeKind.StructDecl)
-                calculateStructLayout(cast(StructDecl)node);
+            if (node.kind == NodeKind.StructDecl) {
+                StructDecl sd = cast(StructDecl)node;
+                if (!sd.isTemplate)
+                    calculateStructLayout(sd);
+            }
             else if (node.kind == NodeKind.UnionDecl)
                 calculateUnionLayout(cast(UnionDecl)node);
 
         foreach (node; ast.body) {
-            if (node.kind == NodeKind.FuncDecl)
-                hir.globals ~= lowerFunc(cast(FuncDecl) node);
+            if (node.kind == NodeKind.FuncDecl) {
+                FuncDecl fn = cast(FuncDecl) node;
+                if (fn.isTemplate)
+                    continue;
+                hir.globals ~= lowerFunc(fn);
+            }
             else if (node.kind == NodeKind.VersionStmt)
                 hir.globals ~= lowerVersion(cast(VersionStmt) node);
             else if (node.kind == NodeKind.VarDecl)
@@ -33,6 +40,8 @@ class AstLowerer {
                 lowerVersion(cast(VersionStmt) node);
             else if (node.kind == NodeKind.StructDecl) {
                 StructDecl sd = cast(StructDecl) node;
+                if (sd.isTemplate)
+                    continue;
                 hir.globals ~= lowerStructDecl(sd);
                 foreach (methodName, overloads; sd.methods)
                     foreach (method; overloads) 
@@ -52,6 +61,156 @@ class AstLowerer {
     }
 
 private:
+
+    HirNode lowerSwitch(SwitchStmt ast)
+    {
+        auto hirSwitch = new HirSwitch();
+        hirSwitch.condition = lowerExpr(ast.condition);
+
+        foreach (caseStmt; ast.cases)
+        {
+            auto hirCase = new HirCaseStmt();
+            hirCase.isDefault = caseStmt.isDefault;
+
+            // Lowering dos valores do case
+            foreach (value; caseStmt.values)
+                hirCase.values ~= lowerExpr(value);
+
+            // Lowering do corpo
+            hirCase.body = lowerBlock(caseStmt.body);
+
+            hirSwitch.cases ~= hirCase;
+        }
+
+        return hirSwitch;
+    }
+
+    HirNode lowerForEach(ForEachStmt ast)
+    {
+        auto block = new HirBlock();
+
+        Type iterableType = ast.iterable.resolvedType;
+        StructType collectionStruct = cast(StructType) iterableType;
+
+        if (collectionStruct is null)
+            if (PointerType ptrType = cast(PointerType) iterableType)
+                collectionStruct = cast(StructType) ptrType.pointeeType;
+
+        if (collectionStruct is null) return block; 
+
+        StructMethod* methodOpIter = collectionStruct.getMethod("opIter");
+        if (methodOpIter is null) {
+            writeln("Erro: opIter não encontrado em ", collectionStruct.name);
+            return block;
+        }
+
+        Type iteratorType = methodOpIter.funcDecl.resolvedType;
+        StructType iteratorStruct = cast(StructType) iteratorType;
+        
+        if (iteratorStruct is null)
+            if (PointerType ptr = cast(PointerType) iteratorType)
+                iteratorStruct = cast(StructType) ptr.pointeeType;
+
+        string iterVarName = "__iter_" ~ to!string(cast(void*)ast);
+        auto iterVarDecl = new HirVarDecl();
+        iterVarDecl.name = iterVarName;
+        iterVarDecl.type = iteratorType; // Tipo correto: O Iterador, não a coleção
+        iterVarDecl.isGlobal = false;
+
+        auto opIterCall = new HirCallExpr();
+        opIterCall.funcName = methodOpIter.funcDecl.mangledName; 
+        opIterCall.type = iteratorType;
+        opIterCall.args ~= lowerLValue(ast.iterable); // Passa o 'self' da coleção
+        
+        iterVarDecl.initValue = opIterCall;
+        block.stmts ~= iterVarDecl;
+
+        StructMethod* methodOpNext = iteratorStruct.getMethod("opNext");
+        if (methodOpNext is null) {
+            writeln("Erro: opNext não encontrado no iterador ", iteratorStruct.name);
+            return block;
+        }
+
+        Type valueType = methodOpNext.funcDecl.resolvedType;
+        string valVarName = "__val_" ~ to!string(cast(void*)ast);
+        auto valVarDecl = new HirVarDecl();
+        valVarDecl.name = valVarName;
+        valVarDecl.type = valueType;
+        valVarDecl.isGlobal = false;
+        valVarDecl.initValue = getDefaultValue(valueType); // Inicializa com null/zero
+        block.stmts ~= valVarDecl;
+
+        auto whileStmt = new HirWhile();
+
+        // Condição: (__val = __iter.opNext()) != null        
+        // Chamada __iter.opNext()
+        auto opNextCall = new HirCallExpr();
+        opNextCall.funcName = methodOpNext.funcDecl.mangledName;
+        opNextCall.type = valueType;
+
+        if (cast(PointerType) iteratorType) 
+        {
+            auto iterLoad = new HirLoad();
+            iterLoad.varName = iterVarName;
+            iterLoad.type = iteratorType;
+            opNextCall.args ~= iterLoad;
+        }
+        else 
+        {
+            auto iterAddr = new HirAddrOf();
+            iterAddr.varName = iterVarName;
+            iterAddr.type = iteratorType; 
+            opNextCall.args ~= iterAddr;
+        }
+
+        auto valAssign = new HirAssignDecl();
+        valAssign.op = "=";
+        
+        auto valAddr = new HirAddrOf();
+        valAddr.varName = valVarName;
+        valAddr.type = valueType;
+        
+        valAssign.target = valAddr;
+        valAssign.value = opNextCall;
+
+        auto assignExpr = new HirAssignExpr();
+        assignExpr.assign = valAssign;
+        assignExpr.type = valueType;
+
+        // Comparação: ... != null
+        auto condition = new HirBinary();
+        condition.op = "!=";
+        condition.left = assignExpr;
+        condition.right = new HirNullLit(valueType);
+        condition.type = new PrimitiveType(BaseType.Bool);
+
+        whileStmt.condition = condition;
+        auto whileBody = new HirBlock();
+
+        auto userVarDecl = new HirVarDecl();
+        userVarDecl.name = ast.iterVar;
+        userVarDecl.type = valueType; 
+        userVarDecl.isGlobal = false;
+
+        auto valLoad = new HirLoad();
+        valLoad.varName = valVarName;
+        valLoad.type = valueType;
+        
+        userVarDecl.initValue = valLoad;
+        whileBody.stmts ~= userVarDecl;
+
+        foreach (stmt; ast.body.statements)
+        {
+            auto lowered = lowerStmt(stmt);
+            if (lowered !is null)
+                whileBody.stmts ~= lowered;
+        }
+
+        whileStmt.body = whileBody;
+        block.stmts ~= whileStmt;
+
+        return block;
+    }
 
     HirNode lowerUnionDecl(UnionDecl ast)
     {
@@ -330,7 +489,7 @@ private:
 
     HirFunction lowerFunc(FuncDecl ast)
     {
-        auto func = new HirFunction();
+        auto func = new HirFunction();            
         func.name = ast.mangledName;
         func.returnType = ast.resolvedType;
         
@@ -369,6 +528,7 @@ private:
             case NodeKind.ReturnStmt:   return lowerReturn(cast(ReturnStmt) node);
             case NodeKind.IfStmt:       return lowerIf(cast(IfStmt) node);
             case NodeKind.ForStmt:      return lowerFor(cast(ForStmt) node);
+            case NodeKind.ForEachStmt:  return lowerForEach(cast(ForEachStmt) node);
             case NodeKind.WhileStmt:    return lowerWhile(cast(WhileStmt) node);
             case NodeKind.AssignDecl:   return lowerAssign(cast(AssignDecl) node);
             case NodeKind.BlockStmt:    return lowerBlock(cast(BlockStmt) node);
@@ -386,6 +546,9 @@ private:
 
             case NodeKind.DeferStmt:
                 return lowerDefer(cast(DeferStmt) node);
+
+            case NodeKind.SwitchStmt:
+                return lowerSwitch(cast(SwitchStmt) node);
 
             default:
                 writeln("Stmt nao implementado no HIR Lowering: ", node.kind);
@@ -691,6 +854,7 @@ private:
         if (auto mem = cast(MemberExpr) ast.id)
         {
             Type targetType = mem.target.resolvedType;
+            ast.id.resolvedType = targetType;
             string structName;
             
             if (auto st = cast(StructType) targetType) structName = st.name;
@@ -699,7 +863,7 @@ private:
             call.funcName = ast.mangledName;
             HirNode thisArg;
             if (cast(StructType) targetType)
-                thisArg = lowerLValue(mem.target); 
+                thisArg = lowerLValue(mem.target);
             else
                 thisArg = lowerExpr(mem.target);
             
@@ -719,8 +883,17 @@ private:
     HirNode lowerIndex(IndexExpr ast)
     {
         auto idx = new HirIndexExpr();
-        idx.target = lowerExpr(ast.target);
         idx.index = lowerExpr(ast.index);
+        idx.target = lowerExpr(ast.target);
+        if (ast.mangledName !is null)
+        {
+            auto call = new HirCallExpr();
+            call.funcName = ast.mangledName; 
+            call.type = ast.resolvedType;
+            call.args ~= lowerLValue(ast.target);
+            call.args ~= idx.index;
+            return call;
+        }
         idx.type = ast.resolvedType;
         return idx;
     }
@@ -757,6 +930,7 @@ private:
         {
             if (st.mangledName in structSizes)
                 return structSizes[st.mangledName];
+            writeln(structSizes);
             writeln("Warning: Size of struct ", st.name, " not found, assuming 0.");
             return 0;
         }
@@ -765,6 +939,7 @@ private:
         {
             if (st.mangledName in structSizes)
                 return structSizes[st.mangledName];
+            writeln("UnionMangled: ", st.mangledName);
             writeln("Warning: Size of union ", st.name, " not found, assuming 0.");
             return 0;
         }

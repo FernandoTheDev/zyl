@@ -9,7 +9,7 @@ enum HirNodeKind
     // Declarações
     VarDecl, AssignDecl, IndexExpr, StructDecl, UnionDecl, EnumDecl, AssignExpr,
     // Statements (Comandos)
-    Store, Return, If, For, CallStmt, Version, While, Break, Continue, Defer,
+    Store, Return, If, For, CallStmt, Version, While, Break, Continue, Defer, Switch, Case,
     // Expressões
     IntLit, FloatLit, StringLit, BoolLit, CharLit, NullLit, ArrayLit, StructLit,
     Binary, Unary, Cast, Load, AddrOf, CallExpr,
@@ -325,4 +325,21 @@ class HirFunctionRef : HirNode {
     string name;        // nome mangled
     Type type;          // FunctionType
     this() { kind = HirNodeKind.FunctionRef; }
+}
+
+class HirSwitch : HirNode
+{
+    HirNode condition;
+    HirCaseStmt[] cases;
+    
+    this() { kind = HirNodeKind.Switch; }
+}
+
+class HirCaseStmt : HirNode
+{
+    HirNode[] values;  // Valores do case (vazio para default)
+    HirBlock body;
+    bool isDefault;
+    
+    this() { kind = HirNodeKind.Case; }
 }

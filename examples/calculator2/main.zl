@@ -1,0 +1,28 @@
+import std.libc.io : { printf }
+import calculator
+import std.string
+import std.vector
+import std.arena
+import std.file
+import std.io
+
+void main(int argc, char** argv) {
+    if (argc != 2) error("A file is expected as an argument.")
+
+    string filename = argv[1]
+    if fileExist(filename) == false error("The file does not exist.")
+
+    Arena arena = Arena{}
+    defer arena.destroy()
+    arena.create(1024 * 1024)
+
+    String source = String{readFile(filename, &arena), &arena}
+    Lexer lexer = Lexer{.source = &source, .arena = &arena, .len = strlen(source.str)}
+    lexer.init()
+    lexer.tokenize()
+
+    TK* tokens = lexer.tokens
+
+    for int i = 0; i < tokens.length; i++
+        tokens.opIndex(i).print(&arena)
+}

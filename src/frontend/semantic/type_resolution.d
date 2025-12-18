@@ -9,12 +9,15 @@ class TypeResolver
     Context ctx;
     DiagnosticError error;
     TypeRegistry registry;
+    TemplateInstantiator instantiator;
+    StructDecl[] structs;
 
-    this(Context ctx, DiagnosticError error, TypeRegistry registry)
+    this(Context ctx, DiagnosticError error, TypeRegistry registry, TemplateInstantiator instantiator = null)
     {
         this.ctx = ctx;
         this.error = error;
         this.registry = registry;
+        this.instantiator = instantiator;
     }
 
     Type resolve(TypeExpr typeExpr)
@@ -46,7 +49,42 @@ private:
         if (auto fn = cast(FunctionTypeExpr) typeExpr)
             return resolveFuncType(fn);
 
+        if (auto ge = cast(GenericTypeExpr) typeExpr)
+            return resolveGenericType(ge);
+
         reportError("Unknown type in the resolution.", typeExpr.loc);
+        return new PrimitiveType(BaseType.Any);
+    }
+
+    Type resolveGenericType(GenericTypeExpr ge)
+    {
+        string[] types = ge.typeArgs.map!(t => t.toStr()).array;
+        string t = ge.baseType.toStr() ~ "_" ~ types.join("_");
+        
+        if (registry.lookupType(t) !is null)
+            return registry.lookupType(t);
+        
+        Type baseType = resolve(ge.baseType);
+        StructSymbol templateSym = ctx.lookupStruct(baseType.toStr()); 
+        
+        if (!templateSym) {
+            reportError("Template struct not found.", ge.loc);
+            return new PrimitiveType(BaseType.Any);
+        }
+
+        if (!instantiator) {
+             reportError("Internal compiler error: Template instantiator missing.", ge.loc);
+             return new PrimitiveType(BaseType.Any);
+        }
+
+        StructSymbol instanceSym = instantiator.instantiateStructFromTypes(templateSym, ge.typeArgs, ge.loc);
+
+        if (instanceSym && instanceSym.type)
+        {
+            structs ~= instanceSym.declaration;
+            return instanceSym.type;
+        }
+
         return new PrimitiveType(BaseType.Any);
     }
 
@@ -61,6 +99,7 @@ private:
         string name = named.name;
         if (!registry.typeExists(name))
         {
+            writeln(registry.listAllTypes()); // debug
             reportError(format("The type '%s' does not exist.", name), named.loc);
             return new PrimitiveType(BaseType.Any);
         }

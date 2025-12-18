@@ -117,6 +117,30 @@ mixin template ParseDecl()
         // o typeresolver corrigirá isso no futuro
         if (!registry.typeExists(id))
             registry.registerType(id, new StructType(id, fields, methods)); // registra uma base temporariamente
+
+        TypeExpr[] types; // [T, U, V, ...]
+        if (this.match([TokenKind.Bang]))
+        {
+            // struct ID ! ID {}
+            if (this.check(TokenKind.Identifier))
+                types ~= new NamedTypeExpr(this.advance().value.get!string, this.previous().loc);
+            // struct ID ! (ID, ...) {}
+            else if (this.match([TokenKind.LParen]))
+            {
+                while (!this.match([TokenKind.RParen]) && !this.isAtEnd())
+                {
+                    string t = this.consume(TokenKind.Identifier, 
+                        "An identifier is expected for template type name.").value.get!string;
+                    types ~= new NamedTypeExpr(t, this.previous().loc);
+                    this.match([TokenKind.Comma]);
+                }
+                // end
+            }
+            foreach (TypeExpr ty; types)
+                if (!registry.typeExists(ty.toStr()))
+                    registry.registerType(ty.toStr(), new PrimitiveType(BaseType.Void));
+        }
+
         this.consume(TokenKind.LBrace, "Expected '{' after struct name.");
 
         // o corpo é basicamente composto por declarações de variaveis e de declarações de funções
@@ -143,8 +167,17 @@ mixin template ParseDecl()
             reportError("You can't use that inside the struct.", node.loc);
         }
 
+        foreach (TypeExpr ty; types)
+            registry.unregisterType(ty.toStr());
+
         this.consume(TokenKind.RBrace, "Expected '}' after struct body.");
-        return new StructDecl(id, fields, methods, this.getLoc(start, this.previous().loc), noMangle);
+        StructDecl decl = new StructDecl(id, fields, methods, this.getLoc(start, this.previous().loc), noMangle);
+        if (types.length > 0)
+        {
+            decl.isTemplate = true;
+            decl.templateType = types;
+        }
+        return decl;
     }
 
     FuncDecl parseFuncDecl(TypeExpr funcType, Token id)

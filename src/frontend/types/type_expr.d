@@ -8,7 +8,6 @@ abstract class TypeExpr : Node
     Loc loc;
 
     abstract string toStr();
-    abstract TypeExpr clone();
 }
 
 /// Tipo nomeado simples: inteiro, texto, MinhaClasse, etc.
@@ -24,6 +23,7 @@ class NamedTypeExpr : TypeExpr
 
     override string toStr()
     {
+        name = name.replace("string", "char*"); // hack
         return name;
     }
 
@@ -57,7 +57,7 @@ class ArrayTypeExpr : TypeExpr
 
     override TypeExpr clone()
     {
-        return new ArrayTypeExpr(elementType.clone(), loc);
+        return new ArrayTypeExpr(cast(TypeExpr)elementType.clone(), loc);
     }
 
     override void print(ulong ident = 0, bool isLast = false)
@@ -93,7 +93,7 @@ class QualifiedTypeExpr : TypeExpr
     }
 }
 
-/// Tipo genérico: Lista<inteiro>, Mapa<texto, inteiro>
+/// Tipo genérico: Lista!int
 class GenericTypeExpr : TypeExpr
 {
     TypeExpr baseType;
@@ -113,7 +113,7 @@ class GenericTypeExpr : TypeExpr
         import std.conv : to;
 
         string args = typeArgs.map!(t => t.toStr()).join(", ");
-        return baseType.toStr() ~ "<" ~ args ~ ">";
+        return baseType.toStr() ~ "!" ~ args;
     }
 
     override TypeExpr clone()
@@ -122,8 +122,8 @@ class GenericTypeExpr : TypeExpr
         import std.array : array;
 
         return new GenericTypeExpr(
-            baseType.clone(),
-            typeArgs.map!(t => t.clone()).array,
+            cast(TypeExpr) baseType.clone(),
+            typeArgs.map!(t => cast(TypeExpr) t.clone()).array,
             loc
         );
     }
@@ -161,8 +161,8 @@ class FunctionTypeExpr : TypeExpr
         import std.array : array;
 
         return new FunctionTypeExpr(
-            paramTypes.map!(t => t.clone()).array,
-            returnType.clone(),
+            paramTypes.map!(t => cast(TypeExpr) t.clone()).array,
+            cast(TypeExpr) returnType.clone(),
             loc
         );
     }
@@ -197,7 +197,7 @@ class PointerTypeExpr : TypeExpr
 
     override TypeExpr clone()
     {
-        return new PointerTypeExpr(pointeeType.clone(), loc);
+        return new PointerTypeExpr(cast(TypeExpr) pointeeType.clone(), loc);
     }
 
     override void print(ulong ident = 0, bool isLast = false)

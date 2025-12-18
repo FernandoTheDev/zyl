@@ -7,4 +7,4 @@ frontend.parser.parser, frontend.types.type_expr, frontend.parser.parse_type,
 frontend.types.builtins, frontend.semantic.context,
 frontend.semantic.semantic1, frontend.types.registry, frontend.semantic.type_resolution, frontend
     .semantic.semantic2, frontend.semantic.semantic3, frontend.semantic.type_checker, frontend
-    .semantic.context, frontend.semantic.function_analyzer;
+    .semantic.context, frontend.semantic.function_analyzer, frontend.semantic.templates;

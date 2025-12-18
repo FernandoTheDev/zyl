@@ -1,0 +1,223 @@
+import std.libc.io
+import std.libc.file
+import std.libc.string
+
+int mandelbrot(double x0, double y0, int max_iter) {
+    double x = 0.0
+    double y = 0.0
+    
+    for int iteration = 0; iteration < max_iter; iteration = iteration + 1 {
+        double x2 = x * x
+        double y2 = y * y
+        
+        if x2 + y2 > 4.0
+            return iteration
+        
+        double xtemp = x2 - y2 + x0
+        y = 2.0 * x * y + y0
+        x = xtemp
+    }
+    
+    return max_iter
+}
+
+int julia(double x, double y, double cx, double cy, int max_iter) {
+    for int iteration = 0; iteration < max_iter; iteration = iteration + 1 {
+        double x2 = x * x
+        double y2 = y * y
+        
+        if x2 + y2 > 4.0
+            return iteration
+        
+        double xtemp = x2 - y2 + cx
+        y = 2.0 * x * y + cy
+        x = xtemp
+    }
+    
+    return max_iter
+}
+
+struct Color {
+    int r;
+    int g;
+    int b;
+}
+
+Color getColor(int iteration, int max_iter) {
+    Color c;
+    
+    if iteration == max_iter {
+        c.r = 0
+        c.g = 0
+        c.b = 0
+        return c
+    }
+    
+    double t = (double)iteration / (double)max_iter
+    double local_t = 0.0
+    
+    if t < 0.16 {
+        local_t = t / 0.16
+        c.r = 0
+        c.g = (int)(local_t * 127.0)
+        c.b = (int)(128.0 + local_t * 127.0)
+    }
+    else if t < 0.42 {
+        local_t = (t - 0.16) / 0.26
+        c.r = 0
+        c.g = (int)(127.0 + local_t * 128.0)
+        c.b = (int)(255.0 - local_t * 127.0)
+    }
+    else if t < 0.64 {
+        local_t = (t - 0.42) / 0.22
+        c.r = (int)(local_t * 255.0)
+        c.g = 255
+        c.b = (int)(128.0 - local_t * 128.0)
+    }
+    else if t < 0.86 {
+        local_t = (t - 0.64) / 0.22
+        c.r = 255
+        c.g = (int)(255.0 - local_t * 128.0)
+        c.b = 0
+    }
+    else {
+        local_t = (t - 0.86) / 0.14
+        c.r = (int)(255.0 - local_t * 128.0)
+        c.g = (int)(127.0 - local_t * 127.0)
+        c.b = 0
+    }
+    
+    return c
+}
+
+void renderAscii(int width, int height, int max_iter) {
+    double xmin = -2.5
+    double xmax = 1.0
+    double ymin = -1.0
+    double ymax = 1.0
+    
+    for int row = 0; row < height; row++ {
+        for int col = 0; col < width; col++ {
+            double x0 = xmin + (xmax - xmin) * (double)col / (double)width
+            double y0 = ymin + (ymax - ymin) * (double)row / (double)height
+            
+            int iter = mandelbrot(x0, y0, max_iter)
+            
+            if iter == max_iter
+                printf("*")
+            else if iter > max_iter / 2
+                printf("+")
+            else if iter > max_iter / 4
+                printf(".")
+            else
+                printf(" ")
+        }
+        printf("\n")
+    }
+}
+
+void renderMandelbrotPPM(string filename, int width, int height, int max_iter) {
+    void* file = fopen(filename, "w")
+    
+    if file == null {
+        printf("Error: Could not open file %s\n", filename)
+        return;
+    }
+    
+    fprintf(file, "P3\n")
+    fprintf(file, "%d %d\n", width, height)
+    fprintf(file, "255\n")
+    
+    double xmin = -2.5
+    double xmax = 1.0
+    double ymin = -1.0
+    double ymax = 1.0
+    
+    for int row = 0; row < height; row++ {
+        for int col = 0; col < width; col++ {
+            double x0 = xmin + (xmax - xmin) * (double)col / (double)width
+            double y0 = ymin + (ymax - ymin) * (double)row / (double)height
+            
+            int iter = mandelbrot(x0, y0, max_iter)
+            Color c = getColor(iter, max_iter)
+            
+            fprintf(file, "%d %d %d ", c.r, c.g, c.b)
+        }
+        fprintf(file, "\n")
+        
+        // Progress indicator for large images
+        if row % 100 == 0 && row > 0
+            printf("Progress: %d/%d rows\n", row, height)
+    }
+    
+    fclose(file)
+    printf("Mandelbrot image saved to %s (%dx%d)\n", filename, width, height)
+}
+
+void renderJuliaPPM(string filename, int width, int height, int max_iter, double cx, double cy) {
+    void* file = fopen(filename, "w")
+    
+    if file == null {
+        printf("Error: Could not open file %s\n", filename)
+        return;
+    }
+    
+    fprintf(file, "P3\n")
+    fprintf(file, "%d %d\n", width, height)
+    fprintf(file, "255\n")
+    
+    double xmin = -2.0
+    double xmax = 2.0
+    double ymin = -2.0
+    double ymax = 2.0
+    
+    for int row = 0; row < height; row++ {
+        for int col = 0; col < width; col++ {
+            double x = xmin + (xmax - xmin) * (double)col / (double)width
+            double y = ymin + (ymax - ymin) * (double)row / (double)height
+            
+            int iter = julia(x, y, cx, cy, max_iter)
+            Color c = getColor(iter, max_iter)
+            
+            fprintf(file, "%d %d %d ", c.r, c.g, c.b)
+        }
+        fprintf(file, "\n")
+        
+        if row % 100 == 0 && row > 0
+            printf("Progress: %d/%d rows\n", row, height)
+    }
+    
+    fclose(file)
+    printf("Julia set image saved to %s (%dx%d) with c = %f + %fi\n", 
+           filename, width, height, cx, cy)
+}
+
+void main(int argc, char** argv) {
+    printf("Fractal Renderer - Mandelbrot & Julia Sets\n")
+    printf("===========================================\n\n")
+    
+    printf("ASCII Preview (Mandelbrot):\n")
+    renderAscii(80, 40, 100)
+    printf("\n")
+    
+    printf("Generating PPM images...\n\n")
+    
+    // Start with smaller images to test
+    renderMandelbrotPPM("mandelbrot_small.ppm", 400, 400, 256)
+    renderMandelbrotPPM("mandelbrot_medium.ppm", 800, 800, 512)
+    
+    // Large image - this will take time!
+    printf("\nGenerating large image (this may take a while)...\n")
+    renderMandelbrotPPM("mandelbrot_large.ppm", 1920, 1080, 1000)
+    
+    printf("\n")
+    
+    // Julia sets
+    renderJuliaPPM("julia_1.ppm", 800, 800, 256, -0.7, 0.27015)
+    renderJuliaPPM("julia_2.ppm", 800, 800, 256, -0.8, 0.156)
+    renderJuliaPPM("julia_3.ppm", 800, 800, 256, 0.285, 0.01)
+    renderJuliaPPM("julia_4.ppm", 800, 800, 256, -0.4, 0.6)
+    
+    printf("\nDone! Open the .ppm files with an image viewer.\n")
+    printf("Tip: convert to PNG with: convert image.ppm image.png\n")
+}

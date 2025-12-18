@@ -74,6 +74,12 @@ private:
         keywords["enum"] = TokenKind.Enum;
         keywords["defer"] = TokenKind.Defer;
         keywords["@nomangle"] = TokenKind.NoMangle;
+        keywords["foreach"] = TokenKind.ForEach;
+        keywords["in"] = TokenKind.In;
+        keywords["switch"] = TokenKind.Switch;
+        keywords["match"] = TokenKind.Match;
+        keywords["default"] = TokenKind.Default;
+        keywords["case"] = TokenKind.Case;
 
         keywords["true"] = TokenKind.True;
         keywords["false"] = TokenKind.False;
@@ -536,6 +542,24 @@ public:
                     advance();
                 continue;
             }
+
+            if (ch == '/' && offset + 1 < source.length && source[offset + 1] == '*')
+            {
+                advance();
+                advance();
+                
+                while (offset + 1 < source.length)
+                {
+                    if (peek() == '*' && offset + 1 < source.length && source[offset + 1] == '/')
+                    {
+                        advance();
+                        advance();
+                        break;
+                    }
+                    advance();
+                }
+                continue;
+    }
 
             // Identificadores e palavras-chave
             if (isIdentStart[ch])

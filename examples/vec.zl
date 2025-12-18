@@ -3,10 +3,10 @@ import std.arena
 import std.string
 import std.vector
 
-void makePush(Vector* vec) {
-    String a = String{"The"}      vec.push(&a)
-    String b = String{"Zyl"}      vec.push(&b)
-    String c = String{"Compiler"} vec.push(&c)
+void makePush(Vector!(String)* vec) {
+    vec.push(String{"The"})
+    vec.push(String{"Zyl"})
+    vec.push(String{"Compiler"})
 }
 
 int main() {
@@ -14,25 +14,24 @@ int main() {
     arena.create(4096)
     defer arena.destroy()
 
-    Vector vec = Vector{}
-    defer vec.destroy()
     // Vector<String> 
-    vec.init_with_arena(sizeof String, &arena)
-    
+    Vector!(String) vec = Vector!(String){}
+    vec.init(&arena, (sizeof String) * 10)
+
     makePush(&vec)
     printf("Len: %d\n", vec.length)
     
     for int i = 0; i < vec.length; i++ {
-        String* val = (String*) vec.get(i)
-        printf("[%d] = %s\n", i, (*val).str)
+        String val = vec.get(i)
+        printf("[%d] = %s\n", i, val.str)
     }
 
-    vec.clear()     
+    vec.reset()
     String d = String{"Fernando"}
-    vec.push(&d)
+    vec.push(d)
     
-    String* val_d = (String*) vec.get(0)
-    printf("%s\n", *val_d.str)
+    String val_d = vec[0]
+    printf("%s %d\n", val_d.str, val_d.length())
 
     return 0
 }

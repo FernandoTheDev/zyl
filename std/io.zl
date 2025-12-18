@@ -1,0 +1,6 @@
+import std.libc.io : { printf, exit }
+
+void error(string msg) {
+    printf("Zyl error: %s\n", msg)
+    exit(1)
+}

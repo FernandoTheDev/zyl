@@ -38,12 +38,15 @@ enum NodeKind
     BlockStmt,
     IfStmt,
     ForStmt,
+    ForEachStmt,
     ReturnStmt,
     VersionStmt,
     WhileStmt,
     BrkOrCntStmt, // BreakOrContinueStmt
     ImportStmt,
     DeferStmt,
+    SwitchStmt,
+    CaseStmt,
 }
 
 abstract class Node
@@ -56,6 +59,7 @@ abstract class Node
     string mangledName;
 
     void print(ulong ident = 0, bool isLast = false);
+    abstract Node clone();
 }
 
 class Program : Node
@@ -80,6 +84,16 @@ class Program : Node
             else
                 node.print(ident + 8, false);
         }
+    }
+
+    override Node clone()
+    {
+        auto cloned = new Program([]);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.loc = this.loc;
+        cloned.body = this.body.map!(n => n.clone()).array;
+        return cloned;
     }
 }
 
@@ -114,6 +128,16 @@ class VarDecl : Node
             value.get!Node.print(ident + continuation.length + 4, true);
         }
     }
+
+    override Node clone()
+    {
+        auto cloned = new VarDecl(this.id, this.type ? cast(TypeExpr) this.type.clone() : null,
+                                  this.value.get!Node ? this.value.get!Node.clone() : null,
+                                  this.isConst, this.loc);
+        cloned.kind = this.kind;
+        cloned.isGlobal = this.isGlobal;
+        return cloned;
+    }
 }
 
 class DoubleLit : Node
@@ -133,6 +157,16 @@ class DoubleLit : Node
 
         println(prefix ~ "DoubleLit: " ~ to!string(value.get!double), ident);
         println(continuation ~ "└── Type " ~ type.toStr(), ident);
+    }
+
+    override Node clone()
+    {
+        auto cloned = new DoubleLit(this.value.get!double, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.resolvedType = this.resolvedType;
+        cloned.mangledName = this.mangledName;
+        return cloned;
     }
 }
 
@@ -154,6 +188,16 @@ class FloatLit : Node
         println(prefix ~ "FloatLit: " ~ to!string(value.get!float), ident);
         println(continuation ~ "└── Type " ~ type.toStr(), ident);
     }
+
+    override Node clone()
+    {
+        auto cloned = new FloatLit(this.value.get!float, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.resolvedType = this.resolvedType;
+        cloned.mangledName = this.mangledName;
+        return cloned;
+    }
 }
 
 class LongLit : Node
@@ -173,6 +217,16 @@ class LongLit : Node
 
         println(prefix ~ "IntLit: " ~ to!string(value.get!long), ident);
         println(continuation ~ "└── Type " ~ type.toStr(), ident);
+    }
+
+    override Node clone()
+    {
+        auto cloned = new LongLit(this.value.get!long, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.resolvedType = this.resolvedType;
+        cloned.mangledName = this.mangledName;
+        return cloned;
     }
 }
 
@@ -194,6 +248,16 @@ class IntLit : Node
         println(prefix ~ "IntLit: " ~ to!string(value.get!int), ident);
         println(continuation ~ "└── Type " ~ type.toStr(), ident);
     }
+
+    override Node clone()
+    {
+        auto cloned = new IntLit(this.value.get!int, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.resolvedType = this.resolvedType;
+        cloned.mangledName = this.mangledName;
+        return cloned;
+    }
 }
 
 class StringLit : Node
@@ -213,6 +277,16 @@ class StringLit : Node
 
         println(prefix ~ "StringLit: \"" ~ value.get!string ~ "\"", ident);
         println(continuation ~ "└── Type " ~ type.toStr(), ident);
+    }
+
+    override Node clone()
+    {
+        auto cloned = new StringLit(this.value.get!string, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.resolvedType = this.resolvedType;
+        cloned.mangledName = this.mangledName;
+        return cloned;
     }
 }
 
@@ -234,6 +308,16 @@ class CharLit : Node
         println(prefix ~ "CharLit: '" ~ value.get!char ~ "'", ident);
         println(continuation ~ "└── Type " ~ type.toStr(), ident);
     }
+
+    override Node clone()
+    {
+        auto cloned = new CharLit(this.value.get!char, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.resolvedType = this.resolvedType;
+        cloned.mangledName = this.mangledName;
+        return cloned;
+    }
 }
 
 class BoolLit : Node
@@ -251,8 +335,18 @@ class BoolLit : Node
         string prefix = isLast ? "└── " : "├── ";
         string continuation = isLast ? "    " : "│   ";
 
-        println(prefix ~ "BoolLit: " ~ value.get!bool ? "true" : "false", ident);
+        println(prefix ~ "BoolLit: " ~ (value.get!bool ? "true" : "false"), ident);
         println(continuation ~ "└── Type " ~ type.toStr(), ident);
+    }
+
+    override Node clone()
+    {
+        auto cloned = new BoolLit(this.value.get!bool, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.resolvedType = this.resolvedType;
+        cloned.mangledName = this.mangledName;
+        return cloned;
     }
 }
 
@@ -260,9 +354,9 @@ class CallExpr : Node
 {
     Node id;
     Node[] args;
-    bool isVarArg;
     int isVarArgAt;
-    bool isExternalCall, isIndirectCall, isRef;
+    bool isExternalCall, isIndirectCall, isRef, isTemplate, isVarArg;
+    TypeExpr[] templateType = [];
     FunctionType refType;
 
     this(Node id, Node[] args, Loc loc)
@@ -293,6 +387,24 @@ class CallExpr : Node
                 arg.print(ident + continuation.length + 4, false);
         }
     }
+
+    override Node clone()
+    {
+        auto cloned = new CallExpr(this.id ? this.id.clone() : null,
+                                   this.args.map!(a => a.clone()).array,
+                                   this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.isVarArgAt = this.isVarArgAt;
+        cloned.isExternalCall = this.isExternalCall;
+        cloned.isIndirectCall = this.isIndirectCall;
+        cloned.isRef = this.isRef;
+        cloned.isTemplate = this.isTemplate;
+        cloned.isVarArg = this.isVarArg;
+        cloned.templateType = this.templateType.map!(t => t ? cast(TypeExpr) t.clone() : null).array;
+        cloned.refType = this.refType ? cast(FunctionType) this.refType.clone() : null;
+        return cloned;
+    }
 }
 
 class Identifier : Node
@@ -314,6 +426,12 @@ class Identifier : Node
         println(prefix ~ "Identifier: " ~ value.get!string, ident);
         println(continuation ~ "├── Type " ~ type.toStr(), ident);
         println(continuation ~ "└── Resolved type: " ~ (resolvedType is null ? "Null" : resolvedType.toStr()), ident);
+    }
+
+    override Node clone()
+    {
+        auto newIdent = new Identifier(value.get!string, loc);
+        return newIdent;
     }
 }
 
@@ -355,6 +473,18 @@ class BinaryExpr : Node
         else
             println(continuation ~ "    └── (Null)", ident);
     }
+
+    override Node clone()
+    {
+        auto cloned = new BinaryExpr(this.left ? this.left.clone() : null,
+                                     this.right ? this.right.clone() : null,
+                                     this.op, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.usesOpBinary = this.usesOpBinary;
+        cloned.isRight = this.isRight;
+        return cloned;
+    }
 }
 
 class NullLit : Node
@@ -374,6 +504,17 @@ class NullLit : Node
 
         println(prefix ~ "NullLiteral", ident);
         println(continuation ~ "└── Type " ~ type.toStr(), ident);
+    }
+
+    override Node clone()
+    {
+        auto cloned = new NullLit(this.loc);
+        cloned.kind = this.kind;
+        cloned.value = this.value;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.resolvedType = this.resolvedType;
+        cloned.mangledName = this.mangledName;
+        return cloned;
     }
 }
 
@@ -407,6 +548,14 @@ class ArrayLit : Node
                 elem.print(ident + continuation.length + 4, false);
         }
     }
+
+    override Node clone()
+    {
+        auto cloned = new ArrayLit(this.elements.map!(e => e.clone()).array, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
+    }
 }
 
 class SizeOfExpr : Node
@@ -431,6 +580,16 @@ class SizeOfExpr : Node
         println(prefix ~ "SizeOfExpr", ident);
         println(continuation ~ "├── Type " ~ type.toStr(), ident);
         println(continuation ~ "└── Resolved type: " ~ (resolvedType is null ? "Null" : resolvedType.toStr()), ident);
+    }
+
+    override Node clone()
+    {
+        auto cloned = new SizeOfExpr(this.value ? cast(TypeExpr) this.value.clone() : null,
+                                     this.type_ ? cast(TypeExpr) this.type_.clone() : null,
+                                     this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
     }
 }
 
@@ -462,6 +621,16 @@ class UnaryExpr : Node
             operand.print(ident + continuation.length + 4, true);
         else
             println(continuation ~ "    └── (Null)", ident);
+    }
+
+    override Node clone()
+    {
+        auto cloned = new UnaryExpr(this.operand ? this.operand.clone() : null,
+                                    this.type ? cast(TypeExpr) this.type.clone() : null,
+                                    this.op, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
     }
 }
 
@@ -502,6 +671,16 @@ class AssignDecl : Node
         else
             println(continuation ~ "    └── (Null)", ident);
     }
+
+    override Node clone()
+    {
+        auto cloned = new AssignDecl(this.left ? this.left.clone() : null,
+                                     this.right ? this.right.clone() : null,
+                                     this.op, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
+    }
 }
 
 class IndexExpr : Node
@@ -515,7 +694,6 @@ class IndexExpr : Node
         this.target = target;
         this.index = index;
         this.loc = loc;
-        // Tipo será determinado depois (elemento do array/string)
         this.type = new NamedTypeExpr(BaseType.Any, loc);
     }
 
@@ -540,6 +718,16 @@ class IndexExpr : Node
             index.print(ident + continuation.length + 4, true);
         else
             println(continuation ~ "    └── (Null)", ident);
+    }
+
+    override Node clone()
+    {
+        auto cloned = new IndexExpr(this.target ? this.target.clone() : null,
+                                    this.index ? this.index.clone() : null,
+                                    this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
     }
 }
 
@@ -572,6 +760,15 @@ class MemberExpr : Node
         else
             println(continuation ~ "    └── (Null)", ident);
     }
+
+    override Node clone()
+    {
+        auto cloned = new MemberExpr(this.target ? this.target.clone() : null,
+                                     this.member, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
+    }
 }
 
 class TypeDecl : Node
@@ -592,6 +789,16 @@ class TypeDecl : Node
         println(prefix ~ format("TypeDecl: (%s) ", value.get!string), ident);
         println(continuation ~ "└── Type " ~ type.toStr(), ident);
     }
+
+    override Node clone()
+    {
+        auto cloned = new TypeDecl(this.value.get!string,
+                                   this.type ? cast(TypeExpr) this.type.clone() : null,
+                                   this.loc);
+        cloned.kind = this.kind;
+        cloned.value = Variant(this.value.get!Node.clone());
+        return cloned;
+    }
 }
 
 struct FuncArgument
@@ -602,6 +809,16 @@ struct FuncArgument
     Node value;
     Loc loc;
     bool variadic;
+
+    FuncArgument clone()
+    {
+        return FuncArgument(this.name,
+                           this.type ? cast(TypeExpr) this.type.clone() : null,
+                           this.resolvedType,
+                           this.value ? this.value.clone() : null,
+                           this.loc,
+                           this.variadic);
+    }
 }
 
 class FuncDecl : Node
@@ -612,6 +829,8 @@ class FuncDecl : Node
     bool isVarArg, noMangle;
     int isVarArgAt;
     bool isExtern = true;
+    bool isTemplate = false;
+    TypeExpr[] templateType = [];
     
     this(string name, ref FuncArgument[] args, Node[] body, TypeExpr type, Loc loc, bool isVarArg, 
         bool isExtern = false, bool noMangle = false)
@@ -669,6 +888,37 @@ class FuncDecl : Node
             }
         }
     }
+
+    override Node clone()
+    {
+        FuncArgument[] clonedArgs;
+        foreach (arg; args)
+            clonedArgs ~= cast(FuncArgument) arg.clone();
+
+        Node[] clonedBody;
+        foreach (Node n; body.statements)
+            clonedBody ~= n.clone();
+
+        TypeExpr[] clonedTemplateTypes;
+        foreach (tExpr; templateType)
+            clonedTemplateTypes ~= cast(TypeExpr) tExpr.clone();
+
+        auto newFunc = new FuncDecl(
+            name,
+            clonedArgs,
+            clonedBody,
+            cast(TypeExpr) type.clone(),
+            loc,
+            isExtern,
+            noMangle,
+            isVarArg
+        );
+
+        newFunc.isTemplate = isTemplate;
+        newFunc.templateType = clonedTemplateTypes;
+        
+        return newFunc;
+    }
 }
 
 class BlockStmt : Node
@@ -694,6 +944,14 @@ class BlockStmt : Node
             bool last = (i == cast(uint) statements.length - 1);
             stmt.print(ident + continuation.length + 4, last);
         }
+    }
+
+    override Node clone()
+    {
+        auto cloned = new BlockStmt(this.statements.map!(s => s.clone()).array, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
     }
 }
 
@@ -738,6 +996,17 @@ class IfStmt : Node
             elseBranch.print(ident + continuation.length + 4, true);
         }
     }
+
+    override Node clone()
+    {
+        auto cloned = new IfStmt(this.condition ? this.condition.clone() : null,
+                                 this.thenBranch ? this.thenBranch.clone() : null,
+                                 this.elseBranch ? this.elseBranch.clone() : null,
+                                 this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
+    }
 }
 
 class VersionStmt : Node
@@ -778,6 +1047,18 @@ class VersionStmt : Node
             println(continuation ~ "└── Else:", ident);
             elseBranch.print(ident + continuation.length + 4, true);
         }
+    }
+
+    override Node clone()
+    {
+        auto cloned = new VersionStmt(this.target,
+                                      this.thenBranch ? cast(BlockStmt) this.thenBranch.clone() : null,
+                                      this.elseBranch ? cast(VersionStmt) this.elseBranch.clone() : null,
+                                      this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.resolvedBranch = this.resolvedBranch ? cast(BlockStmt) this.resolvedBranch.clone() : null;
+        return cloned;
     }
 }
 
@@ -827,6 +1108,19 @@ class ForStmt : Node
         println(continuation ~ "└── Body:", ident);
         body.print(ident + continuation.length + 4, true);
     }
+
+    override Node clone()
+    {
+        auto cloned = new ForStmt(this.init_ ? this.init_.clone() : null,
+                                  this.condition ? this.condition.clone() : null,
+                                  this.increment ? this.increment.clone() : null,
+                                  null, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.mangledName = this.mangledName;
+        cloned.body = this.body ? cast(BlockStmt) this.body.clone() : null;
+        return cloned;
+    }
 }
 
 class ReturnStmt : Node
@@ -854,6 +1148,14 @@ class ReturnStmt : Node
         }
         else
             println(continuation ~ "└── (void)", ident);
+    }
+
+    override Node clone()
+    {
+        auto cloned = new ReturnStmt(this.value ? this.value.clone() : null, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
     }
 }
 
@@ -894,6 +1196,17 @@ class TernaryExpr : Node
         println(continuation ~ "└── Case false:", ident);
         falseExpr.print(ident + continuation.length + 4, true);
     }
+
+    override Node clone()
+    {
+        auto cloned = new TernaryExpr(this.condition ? this.condition.clone() : null,
+                                      this.trueExpr ? this.trueExpr.clone() : null,
+                                      this.falseExpr ? this.falseExpr.clone() : null,
+                                      this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
+    }
 }
 
 class CastExpr : Node
@@ -916,10 +1229,19 @@ class CastExpr : Node
         string continuation = isLast ? "    " : "│   ";
 
         println(prefix ~ "CastExpr", ident);
-        println(continuation ~ "├── Target: " ~ target.toStr(), ident);
+        println(continuation ~ "├── Target: " ~ (target is null ? "null" : target.toStr()), ident);
         println(continuation ~ "├── Resolved type: " ~ (resolvedType is null ? "Null" : resolvedType.toStr()), ident);
         println(continuation ~ "└── Value:", ident);
         from.print(ident + continuation.length + 4, true);
+    }
+
+    override Node clone()
+    {
+        return new CastExpr(
+            target ? cast(TypeExpr) target.clone() : null,
+            from ? from.clone() : null,
+            loc
+    )   ;
     }
 }
 
@@ -930,13 +1252,29 @@ struct StructField
     Type resolvedType;
     Node defaultValue; // Pode ser null
     Loc loc;
+
+    StructField clone()
+    {
+        return StructField(this.name,
+                          this.type ? cast(TypeExpr) this.type.clone() : null,
+                          this.resolvedType,
+                          this.defaultValue ? this.defaultValue.clone() : null,
+                          this.loc);
+    }
 }
 
 struct StructMethod
 {
     FuncDecl funcDecl;
-    bool isConstructor; // true se for this(...)
+    bool isConstructor;
     Loc loc;
+
+    StructMethod clone()
+    {
+        return StructMethod(cast(FuncDecl) this.funcDecl.clone(),
+                           this.isConstructor,
+                           this.loc);
+    }
 }
 
 class StructDecl : Node
@@ -945,6 +1283,8 @@ class StructDecl : Node
     StructField[] fields;
     StructMethod[][string] methods;
     bool noMangle;
+    bool isTemplate = false;
+    TypeExpr[] templateType = [];
 
     this(string name, StructField[] fields, StructMethod[][string] methods, Loc loc, bool noMangle = false)
     {
@@ -964,7 +1304,6 @@ class StructDecl : Node
 
         println(prefix ~ "StructDecl: " ~ name, ident);
         
-        // Imprimir campos
         if (fields.length > 0)
         {
             println(continuation ~ "├── Fields (" ~ to!string(fields.length) ~ "):", ident);
@@ -981,16 +1320,35 @@ class StructDecl : Node
             }
         }
 
-        // Imprimir métodos
         if (methods.length > 0)
         {
             println(continuation ~ "└── Methods (" ~ to!string(methods.length) ~ "):", ident);
-            // foreach (long i, StructMethod method; methods)
-            // {
-            //     bool isLastMethod = (i == cast(uint) methods.length - 1);
-            //     method.funcDecl.print(ident + continuation.length + 4, isLastMethod);
-            // }
+            foreach (mtds; methods)
+            {
+                foreach (long i, StructMethod method; mtds)
+                {
+                    bool isLastMethod = (i == cast(uint) methods.length - 1);
+                    method.funcDecl.print(ident + continuation.length + 4, isLastMethod);
+                }
+            }
         }
+    }
+
+    override Node clone()
+    {
+        StructField[] clonedFields = this.fields.map!(f => f.clone()).array;
+        
+        StructMethod[][string] clonedMethods;
+        foreach (key, methodArray; this.methods)
+        {
+            StructMethod[] newArray = methodArray.map!(m => m.clone()).array;
+            clonedMethods[key] = newArray;
+        }
+        
+        auto cloned = new StructDecl(this.name, clonedFields, clonedMethods, this.loc, this.noMangle);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
     }
 }
 
@@ -1000,6 +1358,14 @@ struct StructFieldInit
     Node value;
     uint position; // usado para inicialização posicional
     Loc loc;
+
+    StructFieldInit clone()
+    {
+        return StructFieldInit(this.name,
+                              this.value ? this.value.clone() : null,
+                              this.position,
+                              this.loc);
+    }
 }
 
 class StructLit : Node
@@ -1008,9 +1374,11 @@ class StructLit : Node
     StructFieldInit[] fieldInits;
     bool isPositional; // true para Test{"John", 17}, false para Test{.name="John"}
     bool isConstructorCall;
+    bool isTemplate = false;
+    TypeExpr[] templateType = [];
 
     this(string structName, StructFieldInit[] fieldInits, bool isPositional, Loc loc, 
-        bool isConstructorCall = false)
+        bool isConstructorCall = false, TypeExpr[] templateType = [])
     {
         this.kind = NodeKind.StructLit;
         this.structName = structName;
@@ -1018,6 +1386,9 @@ class StructLit : Node
         this.isPositional = isPositional;
         this.loc = loc;
         this.isConstructorCall = isConstructorCall;
+        this.templateType = templateType;
+        if (templateType.length > 0)
+            this.isTemplate = true;
         this.type = new StructTypeExpr(structName, loc); // Será resolvido depois
     }
 
@@ -1056,6 +1427,15 @@ class StructLit : Node
             println(continuation ~ "└── Fields: (empty)", ident);
         }
     }
+
+    override Node clone()
+    {
+        StructFieldInit[] clonedInits = this.fieldInits.map!(f => f.clone()).array;
+        auto cloned = new StructLit(this.structName, clonedInits, this.isPositional, this.loc, this.isConstructorCall);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
+    }
 }
 
 class WhileStmt : Node
@@ -1074,6 +1454,15 @@ class WhileStmt : Node
     {
         // ...
     }
+
+    override Node clone()
+    {
+        auto cloned = new WhileStmt(this.condition ? this.condition.clone() : null, null, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.body = this.body ? cast(BlockStmt) this.body.clone() : null;
+        return cloned;
+    }
 }
 
 class BrkOrCntStmt : Node
@@ -1089,6 +1478,14 @@ class BrkOrCntStmt : Node
     override void print(ulong ident = 0, bool isLast = false)
     {
         // ...
+    }
+
+    override Node clone()
+    {
+        auto cloned = new BrkOrCntStmt(this.isBreak, this.loc);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
     }
 }
 
@@ -1124,6 +1521,15 @@ class ImportStmt : Node
             println(continuation ~ "├── Symbols: [" ~ symbols.join(", ") ~ "]", ident);
         if (aliasname != "")
             println(continuation ~ "└── Alias: " ~ aliasname, ident);
+    }
+
+    override Node clone()
+    {
+        auto cloned = new ImportStmt(this.loc, this.symbols.dup, this.aliasname);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.modulePath = this.modulePath;
+        return cloned;
     }
 
     string getFileNameFromImport(string str)
@@ -1167,6 +1573,14 @@ class DeferStmt : Node
         println(continuation ~ "└── Deferring:", ident);
         stmt.print(ident + continuation.length + 4, true);
     }
+
+    override Node clone()
+    {
+        auto cloned = new DeferStmt(this.stmt ? this.stmt.clone() : null);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
+    }
 }
 
 class EnumDecl : Node
@@ -1200,6 +1614,14 @@ class EnumDecl : Node
             string memPrefix = (i == cast(uint) keys.length - 1) ? "└── " : "├── ";
             println(continuation ~ "    " ~ memPrefix ~ key ~ " = " ~ to!string(members[key]), ident);
         }
+    }
+
+    override Node clone()
+    {
+        auto cloned = new EnumDecl(this.name, this.members.dup, this.loc, this.noMangle);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
     }
 }
 
@@ -1239,6 +1661,121 @@ class UnionDecl : Node
         {
             println(continuation ~ "└── Fields: (empty)", ident);
         }
+    }
+
+    override Node clone()
+    {
+        StructField[] clonedFields = this.fields.map!(f => f.clone()).array;
+        auto cloned = new UnionDecl(this.name, clonedFields, this.loc, this.noMangle);
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        return cloned;
+    }
+}
+
+class ForEachStmt : Node
+{
+    string iterVar;
+    Node iterable;
+    BlockStmt body;
+    TypeExpr iterVarType;
+    
+    this(string iterVar, Node iterable, Node[] body, Loc loc, TypeExpr iterVarType = null)
+    {
+        this.kind = NodeKind.ForEachStmt;
+        this.iterVar = iterVar;
+        this.iterable = iterable;
+        this.body = new BlockStmt(body, loc);
+        this.iterVarType = iterVarType;
+        this.loc = loc;
+        this.type = new NamedTypeExpr(BaseType.Void, loc);
+    }
+
+    override void print(ulong ident = 0, bool isLast = false)
+    {
+        string prefix = isLast ? "└── " : "├── ";
+        string continuation = isLast ? "    " : "│   ";
+
+        println(prefix ~ "ForEachStmt", ident);
+        
+        println(continuation ~ "├── Iterator variable: " ~ iterVar, ident);
+        
+        if (iterVarType !is null)
+            println(continuation ~ "│   └── Type: " ~ iterVarType.toStr(), ident);
+        else
+            println(continuation ~ "│   └── Type: (inferred)", ident);
+        
+        println(continuation ~ "├── Iterable:", ident);
+        if (iterable !is null)
+            iterable.print(ident + continuation.length + 4, false);
+        else
+            println(continuation ~ "│   └── (null)", ident);
+
+        println(continuation ~ "└── Body:", ident);
+        body.print(ident + continuation.length + 4, true);
+    }
+
+    override Node clone()
+    {
+        auto cloned = new ForEachStmt(
+            this.iterVar,
+            this.iterable ? this.iterable.clone() : null,
+            null,
+            this.loc,
+            this.iterVarType ? cast(TypeExpr) this.iterVarType.clone() : null
+        );
+        cloned.kind = this.kind;
+        cloned.type = this.type ? cast(TypeExpr) this.type.clone() : null;
+        cloned.body = this.body ? cast(BlockStmt) this.body.clone() : null;
+        return cloned;
+    }
+}
+
+class CaseStmt : Node
+{
+    Node[] values; // Lista de valores (ex: 1, 2, 3). Vazio se for 'default'
+    BlockStmt body;
+    bool isDefault;
+
+    this(Node[] values, BlockStmt body, Loc loc, bool isDefault = false)
+    {
+        this.kind = NodeKind.CaseStmt;
+        this.values = values;
+        this.body = body;
+        this.loc = loc;
+        this.isDefault = isDefault;
+    }
+
+    override void print(ulong ident = 0, bool isLast = false)
+    {}
+
+    override Node clone() {
+        Node[] newValues;
+        foreach(v; values) newValues ~= v.clone();
+        return new CaseStmt(newValues, cast(BlockStmt)body.clone(), loc, isDefault);
+    }
+}
+
+class SwitchStmt : Node
+{
+    Node condition;
+    CaseStmt[] cases;
+
+    this(Node condition, CaseStmt[] cases, Loc loc)
+    {
+        this.kind = NodeKind.SwitchStmt;
+        this.condition = condition;
+        this.cases = cases;
+        this.loc = loc;
+    }
+
+    override void print(ulong ident = 0, bool isLast = false)
+    {}
+
+    override Node clone() {
+        CaseStmt[] newCases;
+        foreach(c; cases) newCases ~= cast(CaseStmt)c.clone();
+        return new SwitchStmt(condition.clone(), newCases, loc);
     }
 }
 

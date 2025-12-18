@@ -9,12 +9,18 @@ class Semantic2
     TypeResolver resolver;
     DiagnosticError error;
     TypeRegistry registry;
+    TypeChecker checker;
 
-    this(Context ctx, DiagnosticError error, TypeRegistry registry)
+    this(Context ctx, DiagnosticError error, TypeRegistry registry, TypeResolver res = null, TypeChecker checker = null)
     {
         this.ctx = ctx;
         this.error = error;
-        this.resolver = new TypeResolver(ctx, error, registry);
+        this.checker = checker;
+        if (res is null)
+            this.resolver = new TypeResolver(ctx, error, registry, new TemplateInstantiator(ctx, error, registry, 
+                this.checker));
+        else
+            this.resolver = res;
         this.registry = registry;
     }
 
@@ -28,6 +34,16 @@ class Semantic2
     {
         foreach (node; program.body)
             resolveDeclaration(node);
+
+        Node[] body;
+        if (resolver.structs.length > 0)
+            body ~= resolver.structs;
+
+        if (checker !is null && checker.structs.length > 0)
+            body ~= checker.structs;
+
+        body ~= program.body;
+        program.body = body;
     }
 
     void resolveDeclaration(Node node)
@@ -82,10 +98,12 @@ class Semantic2
         sym.unionType.fields = decl.fields;
         sym.unionType.rebuildFieldIndexMap();
         decl.resolvedType = sym.unionType;
+
         UnionType existingType = cast(UnionType) registry.lookupType(decl.name);
         existingType.fields = sym.unionType.fields;
         decl.mangledName = mangleName(decl);
         existingType.mangledName = decl.mangledName;
+        
         existingType.rebuildFieldIndexMap();
         registry.updateType(decl.name, existingType);
     }
@@ -96,6 +114,13 @@ class Semantic2
         if (structSym is null)
         {
             reportError(format("Struct '%s' not found in the context.", decl.name), decl.loc);
+            return;
+        }
+
+        if (decl.isTemplate && decl.templateType.length > 0)
+        {
+            structSym.isTemplate = true;
+            structSym.declaration = decl;
             return;
         }
 
@@ -249,6 +274,26 @@ class Semantic2
 
     void resolveFunctionDecl(FuncDecl decl)
     {
+        if (decl.templateType.length > 0 && decl.isTemplate)
+        {   
+            // Registra o símbolo genérico no contexto
+            // Usamos tipos 'Any' temporariamente na assinatura para permitir o registro
+            Type[] dummyParams;
+            foreach(arg; decl.args) dummyParams ~= new PrimitiveType(BaseType.Any);
+            
+            auto sym = new FunctionSymbol(
+                decl.name,
+                dummyParams,
+                new PrimitiveType(BaseType.Void), // Retorno dummy
+                decl,
+                decl.loc
+            );
+            sym.isTemplate = true;
+            sym.isExternal = decl.isExtern;
+            ctx.addFunction(sym);
+            return;
+        }
+
         Type[] paramTypes;
         foreach (i, ref param; decl.args)
         {
@@ -258,7 +303,8 @@ class Semantic2
             param.resolvedType = paramType;
         }
 
-        decl.resolvedType = resolver.resolve(decl.type);
+        if (decl.resolvedType is null)
+            decl.resolvedType = resolver.resolve(decl.type);
 
         auto sym = new FunctionSymbol(
             decl.name,

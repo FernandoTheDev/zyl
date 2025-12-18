@@ -26,9 +26,106 @@ mixin template ParseStmt()
         case TokenKind.Defer:
             advance();
             return new DeferStmt(this.parseExpression());
+        case TokenKind.ForEach:
+            return parseForEach();
+        case TokenKind.Switch:
+            return parseSwitchStmt();
         default:
             return null;
         }
+    }
+
+    SwitchStmt parseSwitchStmt()
+    {
+        Loc start = this.advance().loc; // consome 'switch'
+        Node condition = this.parseExpression();
+        
+        this.consume(TokenKind.LBrace, "Expected '{' after switch condition.");
+        
+        CaseStmt[] cases;
+        bool hasDefault = false;
+
+        while (!this.check(TokenKind.RBrace) && !this.isAtEnd())
+        {
+            if (this.match([TokenKind.Case]))
+            {
+                // Parse: case 1, 2, 3:
+                Node[] values;
+                do {
+                    values ~= this.parseExpression();
+                } while (this.match([TokenKind.Comma]));
+
+                this.consume(TokenKind.Colon, "Expected ':' after case values.");
+                
+                // Parse do corpo do case (lê até achar outro case/default/})
+                BlockStmt caseBody = parseCaseBody();
+                cases ~= new CaseStmt(values, caseBody, values[0].loc);
+            }
+            else if (this.match([TokenKind.Default]))
+            {
+                if (hasDefault)
+                    reportError("Switch statement can only have one 'default' case.", this.previous().loc);
+                
+                this.consume(TokenKind.Colon, "Expected ':' after 'default'.");
+                BlockStmt defaultBody = parseCaseBody();
+                cases ~= new CaseStmt([], defaultBody, this.previous().loc, true);
+                hasDefault = true;
+            }
+            else
+            {
+                reportError("Expected 'case' or 'default' inside switch.", this.peek().loc);
+                this.advance(); // Recuperação de erro básica
+            }
+        }
+
+        this.consume(TokenKind.RBrace, "Expected '}' after switch body.");
+        return new SwitchStmt(condition, cases, start);
+    }
+
+    BlockStmt parseCaseBody()
+    {
+        Loc start = this.peek().loc;
+        Node[] stmts;
+
+        if (this.check(TokenKind.LBrace))
+        {
+            Node[] stmt = this.parseBody();
+            stmts = stmt;
+        } 
+        else 
+        {
+            while (!this.check(TokenKind.Case) && 
+                   !this.check(TokenKind.Default) && 
+                   !this.check(TokenKind.RBrace) && 
+                   !this.isAtEnd())
+                stmts ~= this.parse();
+        }
+        return new BlockStmt(stmts, start);
+    }
+
+    ForEachStmt parseForEach()
+    {
+        Loc start = this.advance().loc;
+        Token iter = this.consume(TokenKind.Identifier, 
+            "Expected iterator variable name after 'foreach' (e.g., 'foreach (item in ...')");
+
+        this.consume(TokenKind.In, 
+            format("Expected 'in' keyword after iterator variable '%s' (e.g., 'foreach (%s in collection)')", 
+                   iter.value.get!string, iter.value.get!string));
+
+        Node iterable = this.parseExpression();
+        if (iterable is null)
+        {
+            reportError(format("Expected iterable expression after 'in' keyword (e.g., 'foreach (%s in myArray)')", 
+                              iter.value.get!string), 
+                       this.peek().loc);
+        }
+
+        Node[] body = this.parseBody(true);
+        if (body.length == 0)
+            reportWarning(format("Empty foreach loop body for iterator '%s'", iter.value.get!string), start);
+    
+        return new ForEachStmt(iter.value.get!string, iterable, body, start);
     }
 
     ImportStmt parseImportStmt()
@@ -58,8 +155,7 @@ mixin template ParseStmt()
         string filename = node.modulePath;
         if (filename.extension != ".zl") filename ~= ".zl";
         
-        string resolvedPath = buildPath(node.loc.dir, filename);
-        
+        string resolvedPath = buildPath(pathRoot, filename);
         if (!exists(resolvedPath))
         {
             loadEnv();
@@ -75,7 +171,6 @@ mixin template ParseStmt()
         }
 
         string fullPath = absolutePath(resolvedPath);
-
         if (fullPath in modulesCache)
             return node;
 
@@ -90,7 +185,7 @@ mixin template ParseStmt()
         string src = readText(fullPath);
         Lexer lexer = new Lexer(fullPath, src, dirName(fullPath), this.error);
         Token[] tokens = lexer.tokenize();
-        Parser parser = new Parser(tokens, this.error, tr);
+        Parser parser = new Parser(tokens, this.error, tr, pathRoot);
         parser.parseProgram();
 
         modulesCache[fullPath] = true;
@@ -104,7 +199,6 @@ mixin template ParseStmt()
         Node condition = this.parseExpression();
         Node[] body = this.parseBody(true);
         return new WhileStmt(condition, body, this.getLoc(loc, this.previous().loc));
-
     }
 
     VersionStmt parseVersionStmt()

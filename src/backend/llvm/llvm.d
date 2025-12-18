@@ -316,3 +316,6 @@ LLVMTypeRef LLVMGlobalGetValueType(LLVMValueRef Global);
 char* LLVMPrintTypeToString(LLVMTypeRef Ty);
 char* LLVMPrintValueToString(LLVMValueRef Val);
 const(char)* LLVMGetValueName2(LLVMValueRef Val, size_t* Length);
+LLVMBasicBlockRef LLVMGetEntryBasicBlock(LLVMValueRef Fn);
+LLVMValueRef LLVMGetFirstInstruction(LLVMBasicBlockRef BB);
+void LLVMPositionBuilderBefore(LLVMBuilderRef Builder, LLVMValueRef Instr);

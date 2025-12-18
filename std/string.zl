@@ -1,16 +1,23 @@
 import std.libc.mem : { malloc, memcpy, free }
 import std.libc.string : { strlen }
 import std.libc.io : { printf, exit }
+import std.arena
 
 struct String {
     string str = ""
+    Arena* arena = null;
     bool owns_memory = false
 
     void concat(String* self, string str2) {
         int l1 = strlen(self.str)
         int l2 = strlen(str2)
         
-        string out = (string) malloc(l1 + l2 + 1)
+        string out;
+        
+        if self.arena == null
+            out = (string) malloc(l1 + l2 + 1)
+        else
+            out = (string) self.arena.alloc(l1 + l2 + 1)
         
         if out == null
             self.error("Allocation failed in String.concat") 
@@ -22,7 +29,8 @@ struct String {
             free(self.str)
 
         self.str = out
-        self.owns_memory = true
+        if self.arena == null
+            self.owns_memory = true
     }
 
     void destroy(String* self) {
@@ -33,11 +41,39 @@ struct String {
         }
     }
 
-    void opAddAssign(String* self, string left) {
-        self.concat(left)
+    void opAddAssign(String* self, string left) { self.concat(left) }
+    void opAddAssign(String* self, char left) {
+        int l1 = strlen(self.str)
+
+        string out;
+
+        if self.arena == null
+            out = (string) malloc(l1 + 2)  // +1 para o char, +1 para \0
+        else
+            out = (string) self.arena.alloc(l1 + 2)
+
+        if out == null
+            self.error("Allocation failed in String.opAddAssign(char)")
+
+        memcpy(out, self.str, l1)
+        out[l1] = left
+        out[l1 + 1] = '\0'
+
+        if self.owns_memory
+            free(self.str)
+
+        self.str = out
+        if self.arena == null
+            self.owns_memory = true
     }
 
-    void opBinary(String* self, string op, string left) {}
+    int length(String* self) {
+        return strlen(self.str)
+    }
+
+    void clear(String* self) {
+        self.str = ""
+    }
 
     void error(String* self, string msg) {
         printf("Error: %s\n", msg)
@@ -45,3 +81,9 @@ struct String {
     }
 }
 
+string charToStr(char c, Arena* arena) {
+    char* str = (char*) arena.alloc(2)
+    str[0] = c
+    str[1] = '\0'
+    return str
+}

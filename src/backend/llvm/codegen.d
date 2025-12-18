@@ -79,10 +79,8 @@ class LLVMBackend
                 LLVMSetInitializer(gVar, initConst);
             }
             else
-            {
                 // Inicializa com Zero (padrão C)
                 LLVMSetInitializer(gVar, LLVMConstNull(type));
-            }
             
             // Registra no mapa de valores para que funções possam usar
             // Importante: O valor no mapa é o PONTEIRO para a global (@x)

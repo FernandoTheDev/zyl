@@ -18,7 +18,17 @@ mixin template CodeGenInstr() {
                 else
                      allocType = LLVMInt64TypeInContext(context);
                 
+                LLVMBasicBlockRef currentBlock = LLVMGetInsertBlock(builder);
+                LLVMBasicBlockRef entryBB = LLVMGetEntryBasicBlock(currentFuncVal);
+                LLVMValueRef firstInstr = LLVMGetFirstInstruction(entryBB);
+                
+                if (firstInstr)
+                    LLVMPositionBuilderBefore(builder, firstInstr);
+                else
+                    LLVMPositionBuilderAtEnd(builder, entryBB);
+                
                 LLVMValueRef val = LLVMBuildAlloca(builder, allocType, "stack");
+                LLVMPositionBuilderAtEnd(builder, currentBlock);
                 setReg(instr.dest, val);
                 break;
 

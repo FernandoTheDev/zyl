@@ -149,7 +149,7 @@ class PrimitiveType : Type
 
     bool isInteger()
     {
-        return baseType == BaseType.Int || baseType == BaseType.Long;
+        return baseType == BaseType.Int || baseType == BaseType.Long || baseType == BaseType.Char;
     }
 
     override bool isNumeric()
@@ -327,11 +327,14 @@ class PointerType : Type
         if (auto otherPtr = cast(PointerType) other) {
             if (toStr() == "void*" || other.toStr() == "void*")
                 return true;
+            if (toStr() == other.toStr())
+                return true;
             return pointeeType.isCompatibleWith(otherPtr.pointeeType, strict);
         }
         if (!strict)
             if (PrimitiveType primi = cast(PrimitiveType) other)
-                if (primi.baseType == BaseType.Int || primi.baseType == BaseType.Long)
+                if (primi.baseType == BaseType.Int || primi.baseType == BaseType.Long || 
+                    primi.baseType == BaseType.Char)
                     return true;
         return false;
     }
@@ -453,7 +456,7 @@ class StructType : Type
 
     override string toStr()
     {
-        return mangledName;
+        return name;
     }
 
     override Type clone()

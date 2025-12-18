@@ -28,12 +28,13 @@ class FunctionAnalyzer
         ctx.enterFunction(funcSym);
 
         if (decl.body !is null) {
-            foreach (param; decl.args)
+            foreach (i, ref param; decl.args) {
                 if (!ctx.addVariable(param.name, param.resolvedType, false, decl.loc))
                     error.addError(Diagnostic(
                             format("Duplicate parameter '%s'", param.name),
                             decl.loc
                     ));
+            }
             
             if (decl.body.statements.length >= 0)
             {

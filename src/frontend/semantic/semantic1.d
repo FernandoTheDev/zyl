@@ -18,12 +18,16 @@ class Semantic1
     Node[] importedASTs;
     static ModuleCacheEntry[string] modulesCache;
     TypeRegistry registry;
+    TypeChecker checker;
+    string pathRoot;
 
-    this(Context ctx, TypeRegistry registry, DiagnosticError error)
+    this(Context ctx, TypeRegistry registry, DiagnosticError error, string pathRoot, TypeChecker checker)
     {
         this.ctx = ctx;
         this.error = error;
         this.registry = registry;
+        this.pathRoot = pathRoot;
+        this.checker = checker;
     }
 
     pragma(inline, true)
@@ -72,9 +76,8 @@ class Semantic1
     {
         string filename = node.modulePath;
         if (filename.extension != ".zl") filename ~= ".zl";
-        
-        string resolvedPath = buildPath(node.loc.dir, filename);
-        
+
+        string resolvedPath = buildPath(pathRoot, filename);
         if (!exists(resolvedPath))
         {
             loadEnv();
@@ -90,7 +93,6 @@ class Semantic1
         }
 
         string fullPath = absolutePath(resolvedPath);
-
         Context importedCtx;
         Program importedProgram;
 
@@ -110,11 +112,12 @@ class Semantic1
                 string src = readText(fullPath);
                 Lexer lexer = new Lexer(fullPath, src, dirName(fullPath), this.error);
                 Token[] tokens = lexer.tokenize();
-                Parser parser = new Parser(tokens, this.error, registry); // Assumindo construtor compatível
+                Parser parser = new Parser(tokens, this.error, registry, pathRoot); // Assumindo construtor compatível
                 importedProgram = parser.parseProgram();
-
-                new Semantic1(importedCtx, registry, this.error).analyze(importedProgram);
-                new Semantic2(importedCtx, error, registry).analyze(importedProgram);
+                TypeChecker importedChecker = new TypeChecker(importedCtx, error, registry);
+                
+                new Semantic1(importedCtx, registry, error, pathRoot, importedChecker).analyze(importedProgram);
+                new Semantic2(importedCtx, error, registry, null, importedChecker).analyze(importedProgram);
 
                 modulesCache[fullPath] = ModuleCacheEntry(importedCtx, importedProgram);
             }
@@ -131,10 +134,11 @@ class Semantic1
             if (importedNode.kind == NodeKind.ImportStmt) continue;
 
             string nodeName = getNodeName(importedNode);
-            if (nodeName == "") continue;
+            if (nodeName == "")
+                continue;
 
             // Verifica se o símbolo é público no contexto original
-            Symbol originalSym = importedCtx.lookupLocal(nodeName);
+            Symbol originalSym = importedCtx.lookup(nodeName);
             if (originalSym is null || !originalSym.isPublic) continue;
             bool shouldImport = false;
 
@@ -153,8 +157,8 @@ class Semantic1
                     // se falhou e foi seletivo, apenas ignore o erro
                     if (isSelective)
                     {
-                        reportError(format("The symbol '%s' already exists in the context..", originalSym.name), 
-                            node.loc);
+                        // reportError(format("The symbol '%s' already exists in the context..", originalSym.name), 
+                        //     node.loc);
                         continue;
                     }
                     continue;
@@ -180,6 +184,8 @@ class Semantic1
     {
         if (auto fd = cast(FuncDecl) node) return fd.name;
         if (auto sd = cast(StructDecl) node) return sd.name;
+        if (auto sd = cast(EnumDecl) node) return sd.name;
+        if (auto sd = cast(UnionDecl) node) return sd.name;
         if (auto vd = cast(VarDecl) node) return vd.id;
         return "";
     }
@@ -193,6 +199,9 @@ class Semantic1
         }
         StructType realType = new StructType(decl.name, decl.fields, decl.methods);
         StructSymbol symbol = new StructSymbol(decl.name, realType, decl, decl.loc);
+        if (!registry.typeExists(decl.name))
+            registry.registerType(decl.name, realType);
+        decl.resolvedType = realType;
         ctx.addStruct(symbol);
     }
 

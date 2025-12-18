@@ -43,6 +43,7 @@ class BuiltinTypes
         aliases["bool"] = _Bool;
         aliases["char"] = _Char;
         aliases["string"] = _String;
+        aliases["char*"] = _String; // hack for templates
         aliases["void"] = _Void;
         aliases["null"] = _Null;
         aliases["i1"] = _Bool;

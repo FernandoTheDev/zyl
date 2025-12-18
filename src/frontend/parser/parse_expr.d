@@ -64,11 +64,11 @@ mixin template ParseExpr()
         case TokenKind.LBracket:
             return this.parseArrayLiteral();
 
-        case TokenKind.Bang:
         case TokenKind.Minus:
         case TokenKind.Plus:
         case TokenKind.Star:
         case TokenKind.BitAnd:
+        case TokenKind.Bang:
             return this.parseUnaryExpr(token);
         
         case TokenKind.Sizeof:
@@ -183,23 +183,80 @@ mixin template ParseExpr()
     Node parseIdentifierExpr(Token name)
     {
         string id = name.value.get!string;
+        
+        // Detecta chamada de template: funcName!Type(args) ou funcName!(T1, T2)(args)
+        if (this.check(TokenKind.Bang))
+        {
+            TypeExpr[] types = parseTemplate();
+
+            if (this.check(TokenKind.LParen))
+                return this.parseTemplateCallExpr(id, name.loc, types);
+
+            if (registry.typeExists(id))
+                return this.parseStructLit(id, name.loc, false, types);
+        }
 
         // Verifica se é uma struct seguida de { ou (
         if (registry.typeExists(id))
-        {
-            // User(...) - chamada de construtor
-            if (this.check(TokenKind.LParen))
-                return this.parseStructLit(id, name.loc, true);
-
-            // User{...} - inicialização literal
             if (this.check(TokenKind.LBrace))
                 return this.parseStructLit(id, name.loc, false);
-        }
-
+        
         return new Identifier(id, name.loc);
     }
 
-    StructLit parseStructLit(string structName, Loc start, bool isConstructorCall)
+    TypeExpr[] parseTemplate()
+    {
+        this.advance(); // consome '!'
+        TypeExpr[] templateTypes;
+        // Caso 1: funcName!Type(args) - um único tipo
+        if (this.check(TokenKind.Identifier))
+            templateTypes ~= this.parseType();
+        // Caso 2: funcName!(Type1, Type2)(args) - múltiplos tipos
+        else if (this.check(TokenKind.LParen))
+        {
+            this.advance(); // consome '('
+            if (!this.check(TokenKind.RParen))
+            {
+                do
+                {
+                    TypeExpr type = this.parseType();
+                    if (type is null)
+                    {
+                        reportError("Expected type in template argument list.", this.peek().loc);
+                        while (!this.isAtEnd() && !this.check(TokenKind.Comma) && 
+                               !this.check(TokenKind.RParen))
+                            this.advance();
+                        if (this.check(TokenKind.Comma))
+                            continue;
+                        break;
+                    }
+                    templateTypes ~= type;
+                }
+                while (this.match([TokenKind.Comma]));
+            }
+
+            this.consume(TokenKind.RParen, "Expected ')' after template types.");
+        }
+        else
+        {
+            reportError("Expected type or '(' after '!' in template.", this.peek().loc);
+            return null;
+        }
+        return templateTypes;
+    }
+
+    CallExpr parseTemplateCallExpr(string funcName, Loc start, TypeExpr[] types)
+    {
+        auto callee = new Identifier(funcName, start);
+        auto callExpr = this.parseCallExpr(callee);
+
+        callExpr.isTemplate = true;
+        callExpr.templateType = types;
+
+        return callExpr;
+    }
+
+    StructLit parseStructLit(string structName, Loc start, bool isConstructorCall, TypeExpr[] types = [])
     {
         StructFieldInit[] fieldInits;
         bool isPositional = true;
@@ -236,7 +293,7 @@ mixin template ParseExpr()
                 "Expected ')' after constructor arguments.").loc;
 
             return new StructLit(structName, fieldInits, true, 
-                                 this.getLoc(start, end), true);
+                                 this.getLoc(start, end), true, types);
         }
         else
         {
@@ -323,7 +380,7 @@ mixin template ParseExpr()
                 "Expected '}' after struct fields.").loc;
 
             return new StructLit(structName, fieldInits, isPositional, 
-                                 this.getLoc(start, end), false);
+                                 this.getLoc(start, end), false, types);
         }
     }
 
@@ -348,11 +405,9 @@ mixin template ParseExpr()
         {
             string id = this.peek().value.get!string;
             if (registry.typeExists(id))
-            {
                 // writeln("ID: ", id);
                 // this.peek().print();
                 return this.parseCastExpr(start);
-            }
         }
 
         Node expr = this.parseExpression(Precedence.LOWEST);

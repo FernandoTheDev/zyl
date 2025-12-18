@@ -1,0 +1,134 @@
+import std.string;
+
+enum TokenKind {
+    Struct,
+    Import,
+    Sizeof,
+    Return,
+    Type,
+    If,
+    Else,
+    For,
+    While,
+    Break,
+    Continue,
+    Version,
+    Union,
+    Enum,
+    Defer,
+    NoMangle,
+    In,
+
+    True,
+    False,
+    Null,
+
+    Identifier, // ID
+    I32,
+    I64,
+    F32,
+    F64,
+    String, // "FernandoDev"
+    Char,
+    Bool,
+    Void,
+
+    LParen, // (
+    RParen, // )
+    LBrace, // {
+    RBrace, // }
+    LBracket, // [
+    RBracket, // ]
+    Plus, // +
+    PlusPlus, // ++
+    Minus, // -
+    MinusMinus, // --
+    Star, // *
+    Slash, // /
+    Comma, // ,
+    Colon, // :
+    SemiColon, // ;
+    Equals, // =
+    Dot, // .
+    Bang, // !
+    Question, // ?
+    Modulo, // %
+
+    GreaterThan, // >
+    GreaterThanEquals, // >=
+    LessThan, // <
+    LessThanEquals, // <=
+    Or, // ||
+    And, // &&
+    EqualsEquals, // ==
+    NotEquals, // ==
+    Arrow, // ->
+
+    BitAnd, // &
+    BitOr, // |
+    BitXor, // ^
+    BitNot, // ~
+    BitSHL, // <<
+    BitSHR, // >>
+    BitSAR, // >>>
+
+    BitAndEquals, // &=
+    BitOrEquals, // |=
+    BitXorEquals, // ^=
+    BitSHLEquals, // <<=
+    BitSHREquals, // >>=
+
+    PlusEquals, // +=
+    MinusEquals, // -=
+    StarEquals, // *=
+    SlashEquals, // /=
+    ModuloEquals, // %=
+    TildeEquals, // ~=
+    Variadic, // ...
+
+    Eof // EndOfFile
+}
+
+union Value {
+    int i;
+    long l;
+    float f;
+    double d;
+    void* ptr;
+    string s;
+    String S;
+    char c;
+}
+
+struct LocLine
+{
+    int offset = 0
+    int line = 0
+}
+
+struct Loc
+{
+    string filename = "";
+    string dir = "";
+    LocLine start;
+    LocLine end;
+    
+    string toStr()
+    {
+        // return format("%s/%s:%d:%d:%d", dir, filename, start.line, start.offset, end.offset);
+        return ""
+    }
+}
+
+struct Token
+{
+    TokenKind kind;
+    Value value;
+    Loc loc;
+
+    void print()
+    {
+        //
+    }
+}
+

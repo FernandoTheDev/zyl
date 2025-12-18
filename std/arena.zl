@@ -1,4 +1,4 @@
-import std.libc.mem : { malloc, free }
+import std.libc.mem : { malloc, free, realloc, memset }
 
 struct Arena {
     char* base = null
@@ -11,10 +11,25 @@ struct Arena {
     }
 
     void* alloc(Arena* self, int amount) {
-        if self.offset + amount > self.size
-            return null
+        int __sum = self.offset + amount
+        if __sum > self.size {
+            int nsize = self.size * 2
+            if nsize < __sum
+                nsize = __sum
+            char* bff = (char*) realloc(self.base, nsize)
+            if bff == null
+                return null
+            self.base = bff
+            self.size = nsize
+        }
         void* ptr = self.base + self.offset
         self.offset = self.offset + amount
+        return ptr
+    }
+
+    void* calloc(Arena* self, int amount) {
+        void* ptr = self.alloc(amount)
+        if ptr != null memset(ptr, 0, amount)
         return ptr
     }
 
@@ -23,7 +38,7 @@ struct Arena {
     }
 
     void destroy(Arena* self) {
-        free(self.base)
+        if self.base != null free(self.base)
         self.base = null
         self.offset = 0
         self.size = 0

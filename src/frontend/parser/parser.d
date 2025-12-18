@@ -26,11 +26,18 @@ private:
     DiagnosticError error;
     TypeRegistry registry;
     bool[string] modulesCache;
+    string pathRoot;
 
     pragma(inline, true)
     void reportError(string message, Loc loc, Suggestion[] suggestions = null)
     {
         error.addError(Diagnostic(message, loc, suggestions));
+    }
+
+    pragma(inline, true)
+    void reportWarning(string message, Loc loc, Suggestion[] suggestions = null)
+    {
+        error.addWarning(Diagnostic(message, loc, suggestions));
     }
 
     mixin ParseDecl!();
@@ -69,10 +76,59 @@ private:
         
         if (this.check(TokenKind.Identifier))
         {
-            // is a type?
-            string id = this.peek().value.get!string;
-            if (registry.typeExists(id) || registry.typePreExists(id))
-                return this.parseFuncOrVar();
+            Token tk = this.peek();
+            string id = tk.value.get!string;
+
+            // forma semantica conhecida
+            bool isKnownType = registry.typeExists(id) || registry.typePreExists(id);
+
+            // heuristica
+            // Nova Lógica (Heurística)
+            // Se já conhecemos, ótimo. Se não, usamos a heurística visual.
+            if ((isKnownType || looksLikeDeclaration()) && this.future(2).kind != TokenKind.Bang)
+                 // É seguro chamar parseFuncOrVar agora.
+                 // Mesmo que o tipo não exista no registry, o parseType() vai criar um NamedTypeExpr
+                 // e o Semantic vai validar depois.
+                 return this.parseFuncOrVar();
+            
+            // template?
+            // pattern: ID ID !
+            // o proximo token é um ID?
+            if (this.future().kind == TokenKind.Identifier && this.future(2).kind == TokenKind.Bang)
+            {
+                this.advance();
+                // is a template
+                // if (!registry.typeExists(id))
+                //     registry.registerType(id, new StructType(id, fields, methods)); // registra uma base temporariamente
+                Token name = this.advance();
+                this.advance(); // skip '!'
+                TypeExpr[] types; // [T, U, V, ...]
+                // ID ID ! ID () {}
+                if (this.check(TokenKind.Identifier))
+                    types ~= new NamedTypeExpr(this.advance().value.get!string, this.previous().loc);
+                // ID ID ! (ID, ...) () {}
+                else if (this.match([TokenKind.LParen]))
+                {
+                    while (!this.match([TokenKind.RParen]) && !this.isAtEnd())
+                    {
+                        string t = this.consume(TokenKind.Identifier, 
+                            "An identifier is expected for template type name.").value.get!string;
+                        types ~= new NamedTypeExpr(t, this.previous().loc);
+                        this.match([TokenKind.Comma]);
+                    }
+                    // end
+                    foreach (TypeExpr ty; types)
+                        if (!registry.typeExists(ty.toStr()))
+                            registry.registerType(ty.toStr(), new PrimitiveType(BaseType.Void));
+                }
+                FuncDecl fn = this.parseFuncDecl(new NamedTypeExpr(id, tk.loc), name);
+                fn.templateType = types;
+                fn.isTemplate = true;
+                // remove os tipos adicionados
+                foreach (TypeExpr ty; types)
+                    registry.unregisterType(ty.toStr());
+                return fn;
+            }
         }
 
         if (this.isDeclaration())
@@ -140,6 +196,12 @@ private:
     Token previous(ulong i = 1)
     {
         return this.tokens[this.pos - i];
+    }
+
+    pragma(inline, true);
+    Token future(ulong i = 1)
+    {
+        return this.tokens[this.pos + i];
     }
 
     Token advance()
@@ -251,12 +313,112 @@ private:
         return Loc(start.filename, start.dir, start.start, end.end);
     }
 
+    // Heurística poderosa para identificar declarações sem Semantic Registry
+    bool looksLikeDeclaration()
+    {
+        // Começa olhando o token atual (offset 0)
+        ulong offset = 0;
+        
+        // 1. Uma declaração deve começar com um Identificador (o nome do Tipo base)
+        if (this.future(offset).kind != TokenKind.Identifier) return false;
+        offset++;
+
+        // 2. Loop para consumir sufixos de tipo (*, [], !, .)
+        while (true)
+        {
+            Token t = this.future(offset);
+
+            // Acesso a módulo: std.io (ID . ID)
+            if (t.kind == TokenKind.Dot)
+            {
+                offset++;
+                if (this.future(offset).kind != TokenKind.Identifier) return false;
+                offset++;
+                continue;
+            }
+
+            // Template: List!int ou DynArray!(T)
+            if (t.kind == TokenKind.Bang)
+            {
+                offset++; // Consome '!'
+                Token next = this.future(offset);
+                
+                // Se for parenteses: !(...)
+                if (next.kind == TokenKind.LParen)
+                {
+                    offset++; 
+                    long depth = 1;
+                    // Avança até fechar os parenteses balanceados
+                    while (depth > 0)
+                    {
+                        Token tk = this.future(offset);
+                        if (tk.kind == TokenKind.Eof) return false;
+                        if (tk.kind == TokenKind.LParen) depth++;
+                        else if (tk.kind == TokenKind.RParen) depth--;
+                        offset++;
+                    }
+                }
+                // Se for identificador direto: !int
+                else if (next.kind == TokenKind.Identifier || 
+                         next.kind == TokenKind.I32 || next.kind == TokenKind.Type) // Ajuste conforme seus tokens de tipo primitivo
+                {
+                    offset++;
+                }
+                else 
+                {
+                    // Sintaxe de template inválida ou complexa demais para heurística
+                    // Mas vamos assumir que pode ser um tipo e continuar
+                }
+                continue;
+            }
+
+            // Ponteiro: int* ou int**
+            if (t.kind == TokenKind.Star)
+            {
+                offset++;
+                continue;
+            }
+
+            // Array: int[] ou int[10]
+            if (t.kind == TokenKind.LBracket)
+            {
+                offset++;
+                long depth = 1;
+                while (depth > 0)
+                {
+                    Token tk = this.future(offset);
+                    if (tk.kind == TokenKind.Eof) return false;
+                    if (tk.kind == TokenKind.LBracket) depth++;
+                    else if (tk.kind == TokenKind.RBracket) depth--;
+                    offset++;
+                }
+                continue;
+            }
+
+            // Se chegou aqui, não é mais parte do Tipo. Sai do loop.
+            break;
+        }
+
+        // 3. O Momento da Verdade:
+        // Se o que vem depois de toda essa "salada de tipos" for um IDENTIFICADOR,
+        // então é uma declaração: Tipo NomeDaVariavel;
+        Token afterType = this.future(offset);
+        
+        if (afterType.kind == TokenKind.Identifier)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
 public:
-    this(Token[] tokens = [], DiagnosticError error, TypeRegistry registry)
+    this(Token[] tokens = [], DiagnosticError error, TypeRegistry registry, string pathRoot)
     {
         this.error = error;
         this.tokens = tokens;
         this.registry = registry;
+        this.pathRoot = pathRoot;
     }
 
     Program parseProgram()

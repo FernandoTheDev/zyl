@@ -3,9 +3,528 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZYL</title>
+    <title>ZYL - Programming Language</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="shortcut icon" href="logo.png" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            color: #fff;
+            font-family: 'Space Grotesk', sans-serif;
+            overflow-x: hidden;
+        }
+
+        /* Animated Background */
+        .bg-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(255, 135, 0, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 135, 0, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: grid-move 20s linear infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes grid-move {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+
+        .glow-orb {
+            position: fixed;
+            width: 500px;
+            height: 500px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255, 135, 0, 0.4), transparent 70%);
+            filter: blur(80px);
+            animation: float 8s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .orb-1 {
+            top: -200px;
+            left: -200px;
+        }
+
+        .orb-2 {
+            bottom: -200px;
+            right: -200px;
+            animation-delay: -4s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(50px, 50px) scale(1.1); }
+        }
+
+        .content {
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Navigation */
+        nav {
+            padding: 30px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding-left: 40px;
+            padding-right: 40px;
+        }
+
+        .logo {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2rem;
+            font-weight: 700;
+            color: #ff8700;
+            text-shadow: 0 0 30px rgba(255, 135, 0, 0.5);
+            letter-spacing: -2px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .logo:hover {
+            transform: scale(1.05);
+            text-shadow: 0 0 50px rgba(255, 135, 0, 0.8);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 40px;
+        }
+
+        .nav-links a {
+            color: rgba(255, 255, 255, 0.6);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s;
+            position: relative;
+            padding: 5px 0;
+        }
+
+        .nav-links a:hover {
+            color: #ff8700;
+        }
+
+        /* Hero */
+        .hero {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 180px 40px 100px;
+            text-align: center;
+        }
+
+        .hero-title {
+            font-size: 8rem;
+            font-weight: 700;
+            line-height: 0.95;
+            margin-bottom: 40px;
+            letter-spacing: -5px;
+            background: linear-gradient(to bottom, #ffffff, #ff8700);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: title-appear 1s ease-out;
+        }
+
+        @keyframes title-appear {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+                filter: blur(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+                filter: blur(0);
+            }
+        }
+
+        .hero-subtitle {
+            font-size: 2rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 60px;
+            font-weight: 400;
+            animation: subtitle-appear 1s ease-out 0.2s both;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        @keyframes subtitle-appear {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .hero-subtitle .highlight {
+            color: #ff8700;
+            font-weight: 700;
+            text-shadow: 0 0 20px rgba(255, 135, 0, 0.5);
+        }
+
+        .cta-group {
+            display: flex;
+            gap: 25px;
+            justify-content: center;
+            margin-bottom: 100px;
+            animation: cta-appear 1s ease-out 0.4s both;
+        }
+
+        @keyframes cta-appear {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .btn {
+            padding: 20px 50px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            text-decoration: none;
+            border-radius: 12px;
+            transition: all 0.3s;
+            font-family: 'Space Grotesk', sans-serif;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary {
+            background: #ff8700;
+            color: #000;
+            border: 3px solid #ff8700;
+            box-shadow: 0 0 30px rgba(255, 135, 0, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 50px rgba(255, 135, 0, 0.6);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: #ff8700;
+            border: 3px solid #ff8700;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 135, 0, 0.1);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(255, 135, 0, 0.3);
+        }
+
+        /* Code Window */
+        .code-showcase {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 40px;
+            animation: code-appear 1s ease-out 0.6s both;
+        }
+
+        @keyframes code-appear {
+            from {
+                opacity: 0;
+                transform: translateY(40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .terminal {
+            background: #0a0a0a;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 2px solid #222;
+            box-shadow: 0 30px 100px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 135, 0, 0.2);
+            transition: all 0.5s;
+        }
+
+        .terminal:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 40px 120px rgba(0, 0, 0, 0.9), 0 0 60px rgba(255, 135, 0, 0.3);
+            border-color: #ff8700;
+        }
+
+        .terminal-header {
+            background: #0f0f0f;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #222;
+        }
+
+        .terminal-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+        }
+
+        .dot-red { background: #ff5f56; box-shadow: 0 0 10px #ff5f56; }
+        .dot-yellow { background: #ffbd2e; box-shadow: 0 0 10px #ffbd2e; }
+        .dot-green { background: #27c93f; box-shadow: 0 0 10px #27c93f; }
+
+        .terminal-title {
+            margin-left: 15px;
+            color: #ff8700;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .terminal-body {
+            padding: 40px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            line-height: 1.8;
+            color: #e0e0e0;
+        }
+
+        .terminal-body pre {
+            margin: 0;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        .keyword { color: #ff8700; font-weight: 700; }
+        .type { color: #ffd700; }
+        .function { color: #4fc3f7; }
+        .string { color: #a5d6ff; }
+        .comment { 
+            color: #666; 
+            font-style: italic;
+        }
+        .operator { color: #ff8700; }
+
+        /* Features */
+        .features {
+            max-width: 1400px;
+            margin: 150px auto;
+            padding: 0 40px;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 40px;
+        }
+
+        .feature {
+            background: rgba(18, 18, 18, 0.5);
+            padding: 50px;
+            border-radius: 20px;
+            border: 2px solid transparent;
+            transition: all 0.4s;
+            backdrop-filter: blur(10px);
+        }
+
+        .feature:hover {
+            border-color: #ff8700;
+            transform: translateY(-10px);
+            background: rgba(18, 18, 18, 0.8);
+            box-shadow: 0 20px 60px rgba(255, 135, 0, 0.2);
+        }
+
+        .feature-icon {
+            width: 70px;
+            height: 70px;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 135, 0, 0.1);
+            border: 2px solid #ff8700;
+            border-radius: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #ff8700;
+            box-shadow: 0 0 20px rgba(255, 135, 0, 0.3);
+            transition: all 0.3s;
+        }
+
+        .feature:hover .feature-icon {
+            transform: scale(1.1) rotate(5deg);
+            box-shadow: 0 0 40px rgba(255, 135, 0, 0.5);
+        }
+
+        .feature h3 {
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+            color: #fff;
+        }
+
+        .feature p {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.1rem;
+            line-height: 1.7;
+        }
+
+        .feature code {
+            background: #0a0a0a;
+            padding: 4px 10px;
+            border-radius: 6px;
+            color: #ff8700;
+            font-size: 0.95rem;
+            border: 1px solid #222;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 80px 40px;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 1rem;
+            border-top: 1px solid #111;
+            margin-top: 100px;
+        }
+
+        footer a {
+            color: #ff8700;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        footer a:hover {
+            text-shadow: 0 0 20px rgba(255, 135, 0, 0.8);
+        }
+
+        @media (max-width: 768px) {
+            .hero-title { font-size: 4rem; letter-spacing: -3px; }
+            .hero-subtitle { font-size: 1.3rem; }
+            .cta-group { flex-direction: column; }
+            .btn { width: 100%; text-align: center; }
+            .features-grid { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body>
-    <!-- hello world :) -->
+    <div class="bg-grid"></div>
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+
+    <div class="content">
+        <nav>
+            <div class="logo">ZYL</div>
+            <div class="nav-links">
+                <a href="https://github.com/FernandoTheDev/zyl/">Docs</a>
+                <a href="https://github.com/FernandoTheDev/zyl/tree/master/examples">Examples</a>
+                <a href="https://github.com/FernandoTheDev/zyl/" target="_blank">GitHub</a>
+            </div>
+        </nav>
+
+        <section class="hero">
+            <h1 class="hero-title">BLAZING<br>FAST</h1>
+            <p class="hero-subtitle">
+                Write elegant code with <span class="highlight">Python's simplicity</span>.<br>
+                Execute at <span class="highlight">C's speed</span>. Zero compromises.
+            </p>
+            <div class="cta-group">
+                <a href="https://github.com/FernandoTheDev/zyl/" class="btn btn-primary">Start Building</a>
+                <a href="https://github.com/FernandoTheDev/zyl/tree/master/examples" class="btn btn-secondary">View Examples</a>
+            </div>
+        </section>
+
+        <section class="code-showcase">
+            <div class="terminal">
+                <div class="terminal-header">
+                    <span class="terminal-dot dot-red"></span>
+                    <span class="terminal-dot dot-yellow"></span>
+                    <span class="terminal-dot dot-green"></span>
+                    <span class="terminal-title">main.zyl</span>
+                </div>
+                <div class="terminal-body">
+                    <pre><code><span class="keyword">import</span> std.libc.io : { printf }
+<span class="keyword">import</span> std.arena
+
+<span class="keyword">struct</span> <span class="type">DynArray</span><span class="operator">!</span><span class="type">T</span> {
+    <span class="type">T</span><span class="operator">*</span> data;
+    <span class="type">int</span> size <span class="operator">=</span> 0
+
+    <span class="keyword">void</span> <span class="function">push</span>(<span class="type">DynArray</span><span class="operator">!</span>(<span class="type">T</span>)<span class="operator">*</span> <span class="keyword">self</span>, <span class="type">T</span> val) {
+        <span class="keyword">self</span>.data[<span class="keyword">self</span>.size<span class="operator">++</span>] <span class="operator">=</span> val
+    }
+
+    <span class="type">T</span> <span class="function">opIndex</span>(<span class="type">DynArray</span><span class="operator">!</span>(<span class="type">T</span>)<span class="operator">*</span> <span class="keyword">self</span>, <span class="type">int</span> idx) {
+        <span class="keyword">return</span> <span class="keyword">self</span>.data[idx]
+    }
+}
+
+<span class="keyword">int</span> <span class="function">main</span>() {
+    <span class="type">Arena</span> arena <span class="operator">=</span> <span class="type">Arena</span>{}
+    <span class="keyword">defer</span> arena.<span class="function">destroy</span>()
+    arena.<span class="function">create</span>(1024)
+
+    <span class="type">int</span><span class="operator">*</span> data <span class="operator">=</span> (<span class="type">int</span><span class="operator">*</span>) arena.<span class="function">alloc</span>(<span class="keyword">sizeof</span> <span class="type">int</span>)
+    <span class="type">DynArray</span><span class="operator">!</span><span class="type">int</span> arr <span class="operator">=</span> <span class="type">DynArray</span><span class="operator">!</span><span class="type">int</span>{data}
+    arr.<span class="function">push</span>(42)
+    
+    <span class="function">printf</span>(<span class="string">"Size: %d\n"</span>, arr.size)
+    <span class="function">printf</span>(<span class="string">"data[0] = %d\n"</span>, arr[0])
+    <span class="keyword">return</span> 0
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="features">
+            <div class="features-grid">
+                <div class="feature">
+                    <div class="feature-icon">Z⚡</div>
+                    <h3>Lightning Fast</h3>
+                    <p>LLVM-powered compilation to native code. Match C's performance with cleaner syntax. No runtime overhead.</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">&lt;T&gt;</div>
+                    <h3>True Generics</h3>
+                    <p>Powerful template system with zero-cost monomorphization. Write generic code that's optimized at compile time.</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">{C}</div>
+                    <h3>C Interop</h3>
+                    <p>Drop-in <code>libc</code> compatibility. Use existing C libraries without friction. No FFI complexity.</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">λ</div>
+                    <h3>Modern Syntax</h3>
+                    <p>Methods, operator overloading, optional semicolons. All the ergonomics you expect from a modern language.</p>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p>Built with ❤️ by the ZYL community • <a href="#">MIT License</a></p>
+        </footer>
+    </div>
 </body>
 </html>

@@ -2,9 +2,9 @@
   "name": "zyl-language",
   "displayName": "ZYL Programming Language",
   "description": "The ZYL Programming Language",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "publisher": "FarpyOrganization",
-  "icon": "./imagens/dark.png",
+  "icon": "./imagens/d.png",
   "engines": {
     "vscode": "^1.106.1"
   },
@@ -18,8 +18,8 @@
       "extensions": [".zl"],
       "configuration": "./language-configuration.json",
       "icon": {
-        "light": "./imagens/light.png",
-        "dark": "./imagens/dark.png"
+        "light": "./imagens/l.png",
+        "dark": "./imagens/d.png"
       }
     }],
     "grammars": [{
